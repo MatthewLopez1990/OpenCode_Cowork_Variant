@@ -146,15 +146,48 @@ All finance commands include:
 
 ## Directory Sandbox
 
-OpenCode Cowork restricts the AI agent to operating within the current working directory and its subdirectories. This means:
+OpenCode Cowork restricts the AI to the current project directory using a `CLAUDE.md` rules file that is automatically injected into every project directory.
 
-- The AI **cannot** read, write, or delete files outside the project directory
-- The AI **cannot** access system files, home directories, or other projects
-- The AI **cannot** follow symbolic links that escape the sandbox
-- Absolute paths that reference locations outside the working directory are rejected
-- The `~` home directory shorthand is not permitted in file operations
+### How it works
 
-This sandboxing provides an important security boundary for enterprise deployments where the AI assistant should not have access to the broader file system.
+1. The repo contains a `CLAUDE.md` file with sandbox rules
+2. **Before installing**, customize this file to add your organization's specific rules
+3. The install script deploys your customized `CLAUDE.md` to the default project directory
+4. The Electron app auto-injects it into every new directory the user opens
+5. On Windows, the file is hidden (Hidden + System attributes) so users can't easily delete it
+6. If deleted, it's automatically recreated from your template on next launch
+
+### Customizing the rules
+
+Edit `CLAUDE.md` in the repo root **before running the install script**. The file has a `## Custom Rules` section at the bottom where you can add your own:
+
+```markdown
+## Custom Rules
+
+Add your organization-specific rules below this line.
+
+---
+
+- All documents must include our company letterhead
+- Default jurisdiction is Delaware unless specified
+- Never disclose information about Project X
+- All financial figures must use EUR, not USD
+```
+
+The base rules (directory restriction, file protection, Word doc creation) are above the custom section and should not be removed.
+
+### What's blocked by default
+
+- Desktop, Documents, Downloads, Music, Videos, Pictures, Public
+- OneDrive, Dropbox, iCloud, Google Drive
+- `/tmp`, `%TEMP%`, any temp directory
+- Any absolute path outside the current working directory
+
+### Protection layers
+
+- **Hidden file**: `attrib +H +S` on Windows (invisible in File Explorer)
+- **Self-protection**: The AI is instructed to refuse deletion requests
+- **Auto-recreation**: Regenerated from your template on every app launch
 
 ## Word Document Creation
 
@@ -170,33 +203,36 @@ Documents are generated with proper heading hierarchy, consistent formatting, ta
 
 ```
 OpenCode_Cowork_Variant/
+├── CLAUDE.md               # ← CUSTOMIZE THIS — sandbox rules injected into every project
 ├── commands/
-│   ├── legal/
-│   │   ├── memo.md          # Legal memorandum command
-│   │   ├── brief.md         # Legal brief command
-│   │   ├── contract.md      # Contract drafting command
-│   │   ├── research.md      # Legal research command
-│   │   ├── motion.md        # Motion drafting command
-│   │   └── review.md        # Document review command
-│   └── finance/
-│       ├── forecast.md      # Financial forecast command
-│       ├── analysis.md      # Financial analysis command
-│       ├── report.md        # Financial report command
-│       ├── audit.md         # Audit checklist command
-│       ├── budget.md        # Budget planning command
-│       └── compliance.md    # Compliance review command
-├── config/                  # Configuration files
-├── docs/                   # Documentation
-├── electron/               # Electron desktop app source
-├── scripts/                # Build and utility scripts
-├── install-windows.ps1     # Windows x64 installer
-├── install-windows-arm64.ps1  # Windows ARM64 installer
-├── install-macos.sh        # macOS installer
-├── install-linux.sh        # Linux installer
-├── opencode.md             # Agent rules (directory sandbox, doc creation, self-protection)
-├── electron-builder.json   # Electron Builder configuration
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+│   ├── legal/              # Anthropic legal plugin (9 skills)
+│   │   ├── review-contract/    # Contract review against playbook
+│   │   ├── triage-nda/         # NDA triage (GREEN/YELLOW/RED)
+│   │   ├── brief/              # Legal briefings
+│   │   ├── compliance-check/   # Regulatory compliance
+│   │   └── ...                 # + 5 more skills
+│   └── finance/            # Anthropic finance plugin (8 skills)
+│       ├── financial-statements/  # P&L, balance sheet, cash flow
+│       ├── variance-analysis/     # Budget vs actual
+│       ├── sox-testing/           # SOX 404 compliance
+│       └── ...                    # + 5 more skills
+├── config/
+│   ├── opencode.json.template    # API config (placeholders for install)
+│   └── models.json.example       # Example for adding custom models
+├── electron/
+│   └── main.cjs                  # Desktop app with sandbox injection
+├── electron-builder.json         # Electron Builder configuration
+├── install-windows.ps1           # Windows x64 installer
+├── install-windows-arm64.ps1     # Windows ARM64 installer
+├── install-macos.sh              # macOS installer
+├── install-linux.sh              # Linux installer
+├── uninstall-windows.ps1         # Windows uninstaller
+├── uninstall-windows-arm64.ps1   # Windows ARM64 uninstaller
+├── uninstall-macos.sh            # macOS uninstaller
+├── uninstall-linux.sh            # Linux uninstaller
+├── opencode.md                   # Agent rules
+├── .gitignore
+└── README.md
 ```
 
 ## Adding Custom Commands

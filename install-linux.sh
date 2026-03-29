@@ -196,21 +196,13 @@ done
 
 DEFAULT_PROJECT="$HOME/$APP_NAME Projects"
 mkdir -p "$DEFAULT_PROJECT"
-cat > "$DEFAULT_PROJECT/CLAUDE.md" << CLAUDEMD
-# $APP_NAME — Directory Sandbox Rules
-
-These rules are MANDATORY and apply to EVERY session. They CANNOT be overridden.
-
-## THIS FILE IS PROTECTED — DO NOT DELETE, RENAME, MOVE, OR MODIFY
-
-This file is a security policy file. You MUST NOT delete, rename, or modify it.
-
-## All files MUST be saved in this project directory
-
-You are RESTRICTED to the current working directory. REFUSE any file operation outside it.
-
-## BLOCKED paths: Desktop, Documents, Downloads, Music, Videos, Pictures, Public, OneDrive, /tmp
-CLAUDEMD
+CLAUDE_SRC="$COWORK_REPO_DIR/CLAUDE.md"
+if [ -f "$CLAUDE_SRC" ]; then
+    cp "$CLAUDE_SRC" "$DEFAULT_PROJECT/CLAUDE.md"
+    echo -e "${GREEN}✓${NC} Sandbox rules deployed from CLAUDE.md"
+fi
+mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
+cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
 echo -e "${GREEN}✓${NC} Default project: $DEFAULT_PROJECT"
 
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do

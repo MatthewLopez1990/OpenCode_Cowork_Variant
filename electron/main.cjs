@@ -20,6 +20,32 @@ try {
   }
 } catch (e) {}
 
+// Sandbox: auto-inject CLAUDE.md into every project directory
+// Reads from the user's customized template saved during install
+const SANDBOX_TEMPLATE = path.join(os.homedir(), '.config', 'opencode', 'sandbox', 'CLAUDE.md.template');
+
+function ensureSandboxRules(directory) {
+  if (!directory) return;
+  const claudePath = path.join(directory, 'CLAUDE.md');
+  try {
+    // Read the user's customized template
+    let rules = '';
+    if (fs.existsSync(SANDBOX_TEMPLATE)) {
+      rules = fs.readFileSync(SANDBOX_TEMPLATE, 'utf8');
+    }
+    if (!rules) return; // No template = no injection
+
+    fs.writeFileSync(claudePath, rules, 'utf8');
+    // On Windows: hide the file
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`attrib +H +S "${claudePath}"`, { stdio: 'ignore', timeout: 5000 });
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+
 const BUILD_DIR_NAME = '.opencode-cowork-build';
 
 function findFreePort() {
@@ -220,6 +246,8 @@ app.whenReady().then(async () => {
     }
 
     console.log(`Build dir: ${buildDir}`);
+    // Inject sandbox rules into the build directory (where OpenCode runs from)
+    ensureSandboxRules(buildDir);
     const port = await startBrandedServer(buildDir, runtime);
     createWindow(port);
   } catch (err) {

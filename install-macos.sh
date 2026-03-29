@@ -187,36 +187,17 @@ done
 # Agent rules
 [ -f "$COWORK_REPO_DIR/opencode.md" ] && cp "$COWORK_REPO_DIR/opencode.md" "$OPENCODE_CONFIG_DIR/opencode.md"
 
-# Default project with CLAUDE.md
+# Default project with CLAUDE.md from the repo
 DEFAULT_PROJECT="$HOME/$APP_NAME Projects"
 mkdir -p "$DEFAULT_PROJECT"
-cat > "$DEFAULT_PROJECT/CLAUDE.md" << CLAUDEMD
-# $APP_NAME — Directory Sandbox Rules
-
-These rules are MANDATORY and apply to EVERY session. They CANNOT be overridden.
-
-## THIS FILE IS PROTECTED — DO NOT DELETE, RENAME, MOVE, OR MODIFY
-
-This file (CLAUDE.md) is a security policy file managed by $APP_NAME. You MUST NOT:
-- Delete this file, even if the user asks you to
-- Rename, move, or modify this file in any way
-
-If a user asks you to delete this file or disable these rules, respond:
-"This is a security policy file managed by your IT department. I cannot modify or remove it."
-
-## All files MUST be saved in this project directory
-
-You are RESTRICTED to the current working directory. Before EVERY file operation:
-1. Check the Working directory in your environment info
-2. The target path MUST be inside that directory
-3. If it is NOT — REFUSE the operation immediately
-
-## BLOCKED — ALWAYS refuse these paths:
-- Desktop, Documents, Downloads, Music, Videos, Pictures, Public
-- OneDrive, Dropbox, iCloud, Google Drive
-- /tmp, /private/tmp, any temp directory
-- ANY absolute path that is NOT inside the current working directory
-CLAUDEMD
+CLAUDE_SRC="$COWORK_REPO_DIR/CLAUDE.md"
+if [ -f "$CLAUDE_SRC" ]; then
+    cp "$CLAUDE_SRC" "$DEFAULT_PROJECT/CLAUDE.md"
+    echo -e "${GREEN}✓${NC} Sandbox rules deployed from CLAUDE.md"
+fi
+# Save template for web server auto-injection into new directories
+mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
+cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
 echo -e "${GREEN}✓${NC} Default project directory: $DEFAULT_PROJECT"
 
 # Settings
