@@ -1,0 +1,27 @@
+{
+  "_comment": "Copy this file to models.json and customize for your organization.",
+  "_instructions": "Each key is the model ID your API expects. The install script reads this file and adds all models to your config.",
+  "models": {
+    "gpt-4o": {
+      "name": "GPT-4o",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "options": { "temperature": 0.7, "max_tokens": 16384 }
+    },
+    "gpt-4o-mini": {
+      "name": "GPT-4o Mini",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "options": { "temperature": 0.7, "max_tokens": 16384 }
+    },
+    "claude-sonnet-4-6": {
+      "name": "Claude 4.6 Sonnet",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "options": { "temperature": 0.7, "max_tokens": 16384 }
+    }
+  }
+}

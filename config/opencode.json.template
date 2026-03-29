@@ -1,0 +1,51 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "oh-my-opencode@latest"
+  ],
+  "model": "__DEFAULT_MODEL__",
+  "agent": {
+    "plan": {
+      "model": "__DEFAULT_MODEL__",
+      "options": {}
+    },
+    "build": {
+      "model": "__DEFAULT_MODEL__",
+      "options": {}
+    },
+    "title": {
+      "model": "__DEFAULT_MODEL__",
+      "options": {}
+    },
+    "summary": {
+      "model": "__DEFAULT_MODEL__",
+      "options": {}
+    }
+  },
+  "provider": {
+    "__PROVIDER_NAME__": {
+      "name": "__DISPLAY_NAME__",
+      "npm": "@ai-sdk/openai-compatible",
+      "models": {
+        "__DEFAULT_MODEL__": {
+          "name": "__DEFAULT_MODEL_DISPLAY__",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        }
+      },
+      "options": {
+        "apiKey": "__API_KEY__",
+        "baseURL": "__API_URL__"
+      }
+    }
+  }
+}

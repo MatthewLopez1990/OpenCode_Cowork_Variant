@@ -1,0 +1,35 @@
+{
+  "appId": "com.cowork.opencode",
+  "productName": "OpenCode Cowork",
+  "directories": {
+    "output": "electron-dist"
+  },
+  "files": [
+    "electron/**/*",
+    "package.json"
+  ],
+  "npmRebuild": false,
+  "extraResources": [
+    { "from": "branding/icon.png", "to": "icon.png" },
+    { "from": "branding/icon.ico", "to": "icon.ico" }
+  ],
+  "mac": {
+    "category": "public.app-category.productivity",
+    "target": [
+      { "target": "dmg", "arch": ["arm64"] }
+    ]
+  },
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64", "arm64"] }
+    ]
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false
+  },
+  "linux": {
+    "category": "Office",
+    "target": ["AppImage"]
+  }
+}
