@@ -710,9 +710,10 @@ export const useConfigStore = create<ConfigStore>()(
                             const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
                             const defaults = apiResult?.default || {};
 
+                            // Server-side filter in index.js already removes non-config providers.
+                            // Do NOT filter here — the SDK strips the 'source' property so
+                            // client-side source checks always fail.
                             const processedProviders: ProviderWithModelList[] = providers
-                                // Only show providers from user config (not all 100+ built-in ones)
-                                .filter((provider) => (provider as any).source === 'config')
                                 .map((provider) => {
                                 const modelRecord = provider.models ?? {};
                                 const models: ProviderModel[] = Object.keys(modelRecord).map((modelId) => modelRecord[modelId]);

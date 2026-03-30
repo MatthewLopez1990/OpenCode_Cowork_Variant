@@ -7000,14 +7000,15 @@ function setupProxy(app) {
   };
 
   // ── Cowork provider filter ──────────────────────────────────────────
-  // Only return providers whose source is "config" (user's opencode.json)
-  // so the UI doesn't show all 100+ built-in providers.
-  app.get('/api/provider', async (req, res) => {
+  // The SDK calls GET /config/providers (NOT /provider).
+  // Filter the response to only include config-sourced providers.
+  const coworkProviderFilter = async (req, res) => {
     try {
       if (!openCodePort) {
         return res.status(503).json({ error: 'OpenCode not ready' });
       }
-      const targetUrl = buildOpenCodeUrl('/provider', '');
+      const upstreamPath = getUpstreamPathForRequest(req);
+      const targetUrl = buildOpenCodeUrl(upstreamPath, '');
       const headers = collectForwardHeaders(req);
 
       const upstreamResponse = await fetch(targetUrl, {
@@ -7023,11 +7024,21 @@ function setupProxy(app) {
 
       const data = await upstreamResponse.json();
 
-      // Response is { all: [...], default: {...} } — filter the all array
-      if (data && Array.isArray(data.all)) {
-        const totalCount = data.all.length;
-        data.all = data.all.filter(p => p.source === 'config');
-        console.log(`[Cowork] Filtered providers: ${data.all.length} config-sourced (from ${totalCount} total)`);
+      // Handle all possible response shapes from the Go backend
+      const filterProviders = (arr) => {
+        if (!Array.isArray(arr)) return arr;
+        const total = arr.length;
+        const filtered = arr.filter(p => p.source === 'config');
+        console.log(`[Cowork] Filtered providers: ${filtered.length} config-sourced (from ${total} total)`);
+        return filtered;
+      };
+
+      if (data && Array.isArray(data.providers)) {
+        data.providers = filterProviders(data.providers);
+      } else if (data && Array.isArray(data.all)) {
+        data.all = filterProviders(data.all);
+      } else if (Array.isArray(data)) {
+        return res.json(filterProviders(data));
       }
 
       res.json(data);
@@ -7037,7 +7048,12 @@ function setupProxy(app) {
         res.status(503).json({ error: 'Failed to fetch providers' });
       }
     }
-  });
+  };
+
+  // Intercept BOTH provider endpoints — the SDK uses /config/providers,
+  // the diagnostic and direct API use /provider.
+  app.get('/api/config/providers', coworkProviderFilter);
+  app.get('/api/provider', coworkProviderFilter);
   // ── End Cowork provider filter ──────────────────────────────────────
 
   // Dedicated forwarder for large session message payloads.

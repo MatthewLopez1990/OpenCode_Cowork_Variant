@@ -1,300 +1,417 @@
 #!/bin/bash
 echo "============================================================"
-echo "  OpenCode Cowork — Full Diagnostic Report"
+echo "  OpenCode Cowork — Diagnostic Report"
 echo "  $(date)"
 echo "  Machine: $(uname -m) | $(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null)"
 echo "============================================================"
 echo ""
 
+PASS="✅"
+FAIL="❌"
+WARN="⚠️"
+
+# ==================================================================
 echo "=== 1. OpenCode Binary ==="
-echo "  which opencode: $(which opencode 2>/dev/null || echo 'NOT IN PATH')"
-echo "  ~/.opencode/bin/opencode: $([ -f ~/.opencode/bin/opencode ] && echo "EXISTS ($(ls -lh ~/.opencode/bin/opencode | awk '{print $5}'))" || echo 'MISSING')"
-echo "  ~/.local/bin/opencode: $([ -f ~/.local/bin/opencode ] && echo "EXISTS ($(ls -lh ~/.local/bin/opencode | awk '{print $5}')) — MAY OVERRIDE" || echo 'not present')"
-echo "  /usr/local/bin/opencode: $([ -f /usr/local/bin/opencode ] && echo "EXISTS — MAY OVERRIDE" || echo 'not present')"
-if [ -f ~/.opencode/bin/opencode ]; then
-    echo "  version: $(~/.opencode/bin/opencode --version 2>&1 | head -1)"
-    echo "  type: $(file ~/.opencode/bin/opencode 2>/dev/null | grep -o 'Mach-O.*' || echo 'unknown')"
+OC_PATH=$(which opencode 2>/dev/null)
+OC_HOME="$HOME/.opencode/bin/opencode"
+if [ -f "$OC_HOME" ]; then
+    OC_VER=$("$OC_HOME" --version 2>&1 | head -1)
+    OC_TYPE=$(file "$OC_HOME" 2>/dev/null | grep -o 'Mach-O.*' || echo 'unknown')
+    OC_SIZE=$(ls -lh "$OC_HOME" | awk '{print $5}')
+    echo "  $PASS Binary: $OC_HOME ($OC_SIZE, $OC_TYPE)"
+    echo "  $PASS Version: $OC_VER"
+    # Check for wrapper script
+    BYTES=$(wc -c < "$OC_HOME" 2>/dev/null || echo 0)
+    if [ "$BYTES" -lt 1000000 ]; then
+        echo "  $FAIL PROBLEM: Binary is only $BYTES bytes — likely a wrapper script, not real binary"
+        echo "     FIX: rm '$OC_HOME' && curl -fsSL https://opencode.ai/install | bash"
+    fi
+else
+    echo "  $FAIL MISSING: $OC_HOME"
+    echo "     FIX: curl -fsSL https://opencode.ai/install | bash"
 fi
-# Check if it's a wrapper script
-if [ -f ~/.opencode/bin/opencode ] && [ "$(wc -c < ~/.opencode/bin/opencode)" -lt 1000 ]; then
-    echo "  WARNING: Binary is only $(wc -c < ~/.opencode/bin/opencode) bytes — likely a WRAPPER SCRIPT"
-    echo "  Content: $(cat ~/.opencode/bin/opencode 2>/dev/null | head -3)"
-fi
+# Check for shadowing
+for shadow in "$HOME/.local/bin/opencode" "/usr/local/bin/opencode"; do
+    [ -f "$shadow" ] && echo "  $WARN Shadow: $shadow exists and may override — rm it"
+done
 echo ""
 
+# ==================================================================
 echo "=== 2. Bun ==="
-echo "  which bun: $(which bun 2>/dev/null || echo 'NOT IN PATH')"
-echo "  version: $(bun --version 2>/dev/null || echo 'NOT FOUND')"
+if command -v bun &>/dev/null; then
+    echo "  $PASS Bun $(bun --version) at $(which bun)"
+else
+    echo "  $FAIL MISSING"
+    echo "     FIX: curl -fsSL https://bun.sh/install | bash"
+fi
 echo ""
 
+# ==================================================================
 echo "=== 3. Config File ==="
 CONFIG="$HOME/.config/opencode/opencode.json"
 if [ -f "$CONFIG" ]; then
-    echo "  Path: $CONFIG"
-    echo "  Size: $(ls -lh "$CONFIG" | awk '{print $5}')"
-    echo "  First bytes (BOM check): $(xxd "$CONFIG" 2>/dev/null | head -1)"
+    # Check for BOM
+    FIRST=$(xxd "$CONFIG" 2>/dev/null | head -1)
+    if echo "$FIRST" | grep -q "efbb bf" 2>/dev/null; then
+        echo "  $FAIL BOM detected — Go JSON parser will fail"
+        echo "     FIX: Rewrite without BOM"
+    fi
     python3 -c "
-import json
-cfg = json.load(open('$CONFIG'))
-print(f'  Valid JSON: YES')
-print(f'  Top keys: {list(cfg.keys())}')
-print(f'  model: {cfg.get(\"model\")}')
-print(f'  plugin: {cfg.get(\"plugin\")}')
-for n,p in cfg.get('provider',{}).items():
-    print(f'  Provider: {n}')
-    print(f'    source: config file')
-    print(f'    name: {p.get(\"name\")}')
-    print(f'    npm: {p.get(\"npm\")}')
-    print(f'    baseURL: {p.get(\"options\",{}).get(\"baseURL\")}')
-    ak = p.get('options',{}).get('apiKey','')
-    print(f'    apiKey: {ak[:10]}... ({len(ak)} chars)')
-    print(f'    models: {list(p.get(\"models\",{}).keys())}')
-for n,a in cfg.get('agent',{}).items():
-    print(f'  Agent {n}: model={a.get(\"model\")}')
-" 2>/dev/null || echo "  PARSE ERROR — config is invalid"
-else
-    echo "  MISSING"
-fi
-echo ""
+import json, sys
+try:
+    cfg = json.load(open('$CONFIG'))
+    print('  $PASS Valid JSON')
+    keys = list(cfg.keys())
+    print(f'  Keys: {keys}')
 
-echo "=== 4. Config in Build Dir ==="
-BUILD_CONFIG="$HOME/.opencode-cowork-build/opencode.json"
-if [ -f "$BUILD_CONFIG" ]; then
-    echo "  $BUILD_CONFIG: EXISTS ($(ls -lh "$BUILD_CONFIG" | awk '{print $5}'))"
-    python3 -c "
-import json
-cfg = json.load(open('$BUILD_CONFIG'))
-for n,p in cfg.get('provider',{}).items():
-    print(f'  Provider: {n} — {len(p.get(\"models\",{}))} models')
+    # Check for crash-causing keys
+    bad_keys = [k for k in keys if k not in ('\$schema','plugin','model','agent','provider')]
+    if bad_keys:
+        print(f'  $FAIL CRASH RISK: Keys {bad_keys} will crash the Go backend!')
+        print(f'     FIX: Remove these keys from {\"$CONFIG\"}')
+
+    # Provider
+    for name, p in cfg.get('provider', {}).items():
+        models = list(p.get('models', {}).keys())
+        print(f'  Provider: {name}')
+        print(f'    Name: {p.get(\"name\")}')
+        print(f'    npm: {p.get(\"npm\")}')
+        print(f'    baseURL: {p.get(\"options\",{}).get(\"baseURL\")}')
+        ak = p.get('options',{}).get('apiKey','')
+        print(f'    apiKey: {ak[:10]}... ({len(ak)} chars)' if ak else '    apiKey: MISSING')
+        print(f'    Models: {len(models)} — {models}')
+        if not ak:
+            print(f'  $FAIL No API key configured!')
+
+    # Default model
+    model = cfg.get('model','')
+    print(f'  Default model: {model}')
+    # Check if default model exists in a provider
+    found = False
+    for name, p in cfg.get('provider', {}).items():
+        if model in p.get('models', {}):
+            found = True
+    if not found and model:
+        print(f'  $WARN Default model \"{model}\" not found in any provider!')
+
+    # Plugin
+    plugins = cfg.get('plugin', [])
+    print(f'  Plugins: {plugins}')
+
+    # Agents
+    for name, a in cfg.get('agent', {}).items():
+        print(f'  Agent \"{name}\": model={a.get(\"model\")}')
+except Exception as e:
+    print(f'  $FAIL PARSE ERROR: {e}')
 " 2>/dev/null
 else
-    echo "  MISSING — OpenCode may not find the config"
+    echo "  $FAIL MISSING: $CONFIG"
+    echo "     FIX: Re-run the installer"
 fi
 echo ""
 
-echo "=== 5. npm SDK ==="
-echo "  @ai-sdk/openai-compatible: $([ -d ~/.config/opencode/node_modules/@ai-sdk/openai-compatible ] && echo "INSTALLED ($(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/node_modules/@ai-sdk/openai-compatible/package.json')).get('version','?'))" 2>/dev/null))" || echo 'MISSING')"
-echo "  @opencode-ai/plugin: $([ -d ~/.config/opencode/node_modules/@opencode-ai/plugin ] && echo "INSTALLED ($(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/node_modules/@opencode-ai/plugin/package.json')).get('version','?'))" 2>/dev/null))" || echo 'MISSING')"
-# Also check build dir
-echo "  In build dir node_modules: $([ -d ~/.opencode-cowork-build/node_modules/@ai-sdk ] && echo 'YES' || echo 'NO')"
+# ==================================================================
+echo "=== 4. npm Provider SDK ==="
+SDK_DIR="$HOME/.config/opencode/node_modules/@ai-sdk/openai-compatible"
+if [ -d "$SDK_DIR" ]; then
+    VER=$(python3 -c "import json; print(json.load(open('$SDK_DIR/package.json')).get('version','?'))" 2>/dev/null)
+    echo "  $PASS @ai-sdk/openai-compatible v$VER"
+else
+    echo "  $FAIL MISSING: @ai-sdk/openai-compatible not installed"
+    echo "     FIX: cd ~/.config/opencode && bun add @ai-sdk/openai-compatible"
+fi
+PLUGIN_DIR="$HOME/.config/opencode/node_modules/@opencode-ai/plugin"
+if [ -d "$PLUGIN_DIR" ]; then
+    VER=$(python3 -c "import json; print(json.load(open('$PLUGIN_DIR/package.json')).get('version','?'))" 2>/dev/null)
+    echo "  $PASS @opencode-ai/plugin v$VER"
+else
+    echo "  $WARN @opencode-ai/plugin not installed (oh-my-opencode may not work)"
+fi
 echo ""
 
-echo "=== 6. Build Directory ==="
+# ==================================================================
+echo "=== 5. Build Directory ==="
 BD="$HOME/.opencode-cowork-build"
-echo "  exists: $([ -d "$BD" ] && echo 'YES' || echo 'NO')"
-echo "  electron/main.cjs: $([ -f "$BD/electron/main.cjs" ] && echo 'YES' || echo 'MISSING')"
-echo "  CLAUDE_TEMPLATE.md: $([ -f "$BD/packages/web/server/CLAUDE_TEMPLATE.md" ] && echo 'YES' || echo 'MISSING')"
-echo "  ensureSandboxRules in server: $(grep -c 'ensureSandboxRules' "$BD/packages/web/server/index.js" 2>/dev/null || echo '0')"
-echo "  provider filter in compiled JS: $(grep -c 'source.*config\|expedient-ai' "$BD/packages/web/dist/assets/index-"*.js 2>/dev/null || echo 'not found')"
-echo "  useConfigStore filter: $(grep 'filter.*provider\|\.filter.*source' "$BD/packages/ui/src/stores/useConfigStore.ts" 2>/dev/null | head -1 | tr -d ' ')"
-echo "  --- Compiled JS filter snippet ---"
-for jsfile in "$BD/packages/web/dist/assets/index-"*.js; do
-    if [ -f "$jsfile" ]; then
-        echo "  JS bundle: $(basename "$jsfile") ($(ls -lh "$jsfile" | awk '{print $5}'))"
-        # Extract 100 chars around any provider filter
-        grep -oP '.{0,50}(source.*config|expedient-ai|filter.*provider|processedProviders).{0,50}' "$jsfile" 2>/dev/null | head -5 | while read snippet; do
-            echo "    MATCH: ...${snippet}..."
-        done
-        # Check if the old expedient-ai hardcoded filter is still there
-        if grep -q 'expedient-ai' "$jsfile" 2>/dev/null; then
-            echo "    WARNING: 'expedient-ai' string found in compiled bundle!"
+if [ ! -d "$BD" ]; then
+    echo "  $FAIL MISSING: $BD"
+    echo "     FIX: Re-run the installer"
+else
+    echo "  $PASS Exists: $BD"
+
+    # Server
+    SRV="$BD/packages/web/server/index.js"
+    if [ -f "$SRV" ]; then
+        echo "  $PASS Server: index.js exists"
+        # Check for provider filter on CORRECT endpoint
+        if grep -q '/api/config/providers' "$SRV" 2>/dev/null; then
+            echo "  $PASS Server provider filter: intercepts /api/config/providers (correct)"
+        elif grep -q '/api/provider' "$SRV" 2>/dev/null && ! grep -q '/api/config/providers' "$SRV" 2>/dev/null; then
+            echo "  $FAIL Server provider filter: intercepts /api/provider (WRONG endpoint!)"
+            echo "     The SDK uses /api/config/providers, not /api/provider"
+            echo "     FIX: Update server from repo: cp repo/packages/web/server/index.js $SRV"
+        else
+            echo "  $FAIL No server-side provider filter found"
         fi
-        if grep -q '"config"' "$jsfile" 2>/dev/null && grep -q 'source' "$jsfile" 2>/dev/null; then
-            echo "    OK: 'source' and 'config' strings found (new filter likely active)"
-        fi
+        # Sandbox
+        TMPL="$BD/packages/web/server/CLAUDE_TEMPLATE.md"
+        [ -f "$TMPL" ] && echo "  $PASS CLAUDE_TEMPLATE.md deployed" || echo "  $WARN CLAUDE_TEMPLATE.md missing"
+    else
+        echo "  $FAIL Server index.js MISSING"
     fi
-done
+
+    # Config in build dir
+    [ -f "$BD/opencode.json" ] && echo "  $PASS opencode.json in build dir" || echo "  $WARN opencode.json missing in build dir"
+
+    # Compiled React
+    MAIN_JS=$(find "$BD/packages/web/dist/assets/" -name "main-*.js" -type f 2>/dev/null | head -1)
+    if [ -n "$MAIN_JS" ]; then
+        SIZE=$(ls -lh "$MAIN_JS" | awk '{print $5}')
+        echo "  $PASS Compiled React: $(basename "$MAIN_JS") ($SIZE)"
+        # Check if the broken filter is in compiled code
+        if grep -q 'source.*config' "$MAIN_JS" 2>/dev/null; then
+            echo "  $WARN Compiled JS still has source=config filter (SDK strips this field)"
+        fi
+    else
+        echo "  $WARN No main-*.js found in dist/assets/"
+    fi
+fi
 echo ""
 
-echo "=== 7. App Bundle ==="
-# Try to find the app from branding, then fallback to common names
+# ==================================================================
+echo "=== 6. App Bundle ==="
 BRAND_APP=""
-if [ -f ~/.cowork-branding.json ]; then
-    BRAND_APP=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)
-fi
+[ -f "$HOME/.cowork-branding.json" ] && BRAND_APP=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)
 APP=""
-for candidate in "/Applications/${BRAND_APP}.app" "/Applications/Expedient Cowork.app" "/Applications/SF Steward.app"; do
-    if [ -d "$candidate" ]; then
-        APP="$candidate"
-        break
+for candidate in "/Applications/${BRAND_APP}.app" "/Applications/Expedient Cowork.app"; do
+    [ -d "$candidate" ] && APP="$candidate" && break
+done
+
+if [ -z "$APP" ] || [ ! -d "$APP" ]; then
+    echo "  $FAIL No app found in /Applications"
+else
+    echo "  $PASS Installed: $APP"
+    RES="$APP/Contents/Resources"
+
+    # Icon check
+    PLIST_ICON=$(defaults read "$APP/Contents/Info.plist" CFBundleIconFile 2>/dev/null || echo 'NOT SET')
+    echo "  Info.plist CFBundleIconFile: $PLIST_ICON"
+
+    if [ -f "$RES/$PLIST_ICON" ]; then
+        ICON_SIZE=$(ls -lh "$RES/$PLIST_ICON" | awk '{print $5}')
+        echo "  $PASS $PLIST_ICON exists ($ICON_SIZE)"
+
+        # Is it the Electron default or custom?
+        ICON_MD5=$(md5 -q "$RES/$PLIST_ICON" 2>/dev/null)
+        ELECTRON_ICNS=$(find "$BD/node_modules" -path "*/electron/dist/Electron.app/Contents/Resources/electron.icns" 2>/dev/null | head -1)
+        if [ -n "$ELECTRON_ICNS" ]; then
+            DEFAULT_MD5=$(md5 -q "$ELECTRON_ICNS" 2>/dev/null)
+            if [ "$ICON_MD5" = "$DEFAULT_MD5" ]; then
+                echo "  $FAIL ICON IS THE DEFAULT ELECTRON ICON (hash matches)"
+                echo "     FIX: The .icns creation or replacement failed."
+                echo "     Run: see icon fix section below"
+            else
+                echo "  $PASS Icon is custom (hash differs from default)"
+            fi
+        fi
+    else
+        echo "  $FAIL $PLIST_ICON is MISSING from Resources"
     fi
-done
-# Also scan for any cowork-like apps
-echo "  All matching apps in /Applications:"
-ls -d /Applications/*.app 2>/dev/null | grep -iE "cowork|steward|opencode|openchamber" | while read a; do
-    echo "    $a"
-done
-if [ -n "$APP" ] && [ -d "$APP" ]; then
-    echo "  installed: YES"
-    echo "  icon.icns: $([ -f "$APP/Contents/Resources/icon.icns" ] && echo "YES ($(ls -lh "$APP/Contents/Resources/icon.icns" | awk '{print $5}'))" || echo 'MISSING')"
-    echo "  electron.icns: $([ -f "$APP/Contents/Resources/electron.icns" ] && echo "YES — THIS OVERRIDES custom icon" || echo 'not present (good)')"
-    echo "  Info.plist icon: $(defaults read "$APP/Contents/Info.plist" CFBundleIconFile 2>/dev/null || echo 'NOT SET')"
-    echo "  All icns files:"
-    find "$APP/Contents/Resources/" -name "*.icns" 2>/dev/null | while read f; do
+
+    # List all icns
+    echo "  All .icns in Resources:"
+    find "$RES" -name "*.icns" 2>/dev/null | while read f; do
         echo "    $(basename "$f"): $(ls -lh "$f" | awk '{print $5}')"
     done
-else
-    echo "  NOT INSTALLED"
 fi
 echo ""
 
-echo "=== 8. CLAUDE.md ==="
-# Use branding to find the right project dir
-BRAND_APPNAME=""
-if [ -f ~/.cowork-branding.json ]; then
-    BRAND_APPNAME=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)
-fi
-for projdir in "$HOME/${BRAND_APPNAME} Projects" "$HOME/Expedient Cowork Projects" "$HOME/SF Steward Projects"; do
-    if [ -d "$projdir" ]; then
-        echo "  Project dir: $projdir — EXISTS"
-        echo "  CLAUDE.md: $([ -f "$projdir/CLAUDE.md" ] && echo "EXISTS ($(wc -l < "$projdir/CLAUDE.md" | tr -d ' ') lines)" || echo 'MISSING')"
-        break
-    fi
-done
+# ==================================================================
+echo "=== 7. Running Processes ==="
+ps aux | grep -E "opencode|bun.*server|Expedient|Cowork" | grep -v grep | awk '{printf "  PID %-6s %s\n", $2, $11}' | head -5
 echo ""
 
-echo "=== 9. Branding ==="
-echo "  ~/.cowork-branding.json: $(cat ~/.cowork-branding.json 2>/dev/null || echo 'MISSING')"
-echo ""
-
-echo "=== 10. Running Processes ==="
-ps aux | grep -E "opencode|bun.*server|Expedient" | grep -v grep | awk '{printf "  PID %-6s %s %s %s\n", $2, $11, $12, $13}' | head -5
-echo ""
-
-echo "=== 11. Listening Ports ==="
-lsof -i -P 2>/dev/null | grep -E "bun|opencode|node" | grep LISTEN | awk '{printf "  %-10s port %s\n", $1, $9}' | head -5
-echo ""
-
-echo "=== 12. Server API Response (CRITICAL) ==="
+# ==================================================================
+echo "=== 8. Server API Tests (CRITICAL) ==="
 WEB_PORT=$(lsof -i -P 2>/dev/null | grep bun | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
-if [ -n "$WEB_PORT" ]; then
-    echo "  Web server port: $WEB_PORT"
+if [ -z "$WEB_PORT" ]; then
+    echo "  $FAIL Bun web server NOT RUNNING"
+    echo "     FIX: Open the app or run: cd $BD && bun packages/web/server/index.js"
+else
+    echo "  Bun web server: port $WEB_PORT"
 
-    echo "  --- /api/provider ---"
-    PROV_RESP=$(curl -s -m 10 "http://localhost:$WEB_PORT/api/provider" 2>/dev/null)
-    echo "$PROV_RESP" | python3 -c "
+    # Test 1: /api/config/providers (what the SDK actually calls)
+    echo ""
+    echo "  --- GET /api/config/providers (SDK endpoint) ---"
+    SDK_RESP=$(curl -s -m 10 "http://localhost:$WEB_PORT/api/config/providers" 2>/dev/null)
+    if [ -z "$SDK_RESP" ]; then
+        echo "  $FAIL No response (timeout or error)"
+    else
+        echo "$SDK_RESP" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
-    if isinstance(d, dict) and 'all' in d:
-        total = len(d['all'])
-        config_provs = [p for p in d['all'] if p.get('source') == 'config']
-        exp = [p for p in d['all'] if 'expedient' in p.get('id','').lower()]
-        print(f'    Total providers: {total}')
-        print(f'    Config-sourced: {len(config_provs)}')
-        for p in config_provs:
-            print(f'      {p[\"id\"]}: {p[\"name\"]} ({len(p.get(\"models\",{}))} models, source={p.get(\"source\")})')
-        if exp and not any(p.get('source')=='config' for p in exp):
-            print(f'    WARNING: expedient-ai exists but source={exp[0].get(\"source\")} (not config)')
+    if isinstance(d, dict):
+        keys = list(d.keys())
+        print(f'  Response keys: {keys}')
+        # Check 'providers' key (what SDK returns)
+        provs = d.get('providers', d.get('all', []))
+        if isinstance(provs, list):
+            total = len(provs)
+            config_provs = [p for p in provs if p.get('source') == 'config']
+            print(f'  Total providers: {total}')
+            print(f'  Config-sourced: {len(config_provs)}')
+            if total > 10 and len(config_provs) <= 5:
+                print(f'  $FAIL SERVER FILTER NOT WORKING: {total} providers returned (should be {len(config_provs)})')
+                print(f'     The server should filter to only config providers')
+            elif len(config_provs) == 0 and total > 0:
+                # Check if source field exists at all
+                has_source = any('source' in p for p in provs[:5])
+                if not has_source:
+                    print(f'  $WARN Providers have no \"source\" field — filter cannot work')
+                    print(f'     This endpoint may not include source info')
+                else:
+                    print(f'  $FAIL No config providers found among {total}')
+            for p in config_provs:
+                models = list(p.get('models', {}).keys()) if isinstance(p.get('models'), dict) else p.get('models', [])
+                print(f'    {p[\"id\"]}: {p.get(\"name\",\"?\")} ({len(models)} models, source={p.get(\"source\")})')
         defaults = d.get('default', {})
-        exp_default = defaults.get('expedient-ai', 'NOT SET')
-        print(f'    expedient-ai default model: {exp_default}')
-    elif isinstance(d, dict) and 'error' in d:
-        print(f'    ERROR: {d[\"error\"]}')
+        if defaults:
+            print(f'  Defaults: {defaults}')
+    elif isinstance(d, list):
+        total = len(d)
+        config_provs = [p for p in d if p.get('source') == 'config']
+        print(f'  Response is array: {total} providers ({len(config_provs)} config-sourced)')
     else:
-        print(f'    Unexpected response type: {type(d).__name__}')
+        print(f'  Unexpected type: {type(d).__name__}')
 except Exception as e:
-    print(f'    Parse error: {e}')
+    print(f'  $FAIL Parse error: {e}')
+    print(f'  Raw (first 200 chars): {sys.stdin.read()[:200]}')
 " 2>/dev/null
+    fi
 
-    echo "  --- /api/config (what OpenCode sees) ---"
-    curl -s -m 10 "http://localhost:$WEB_PORT/api/config" | python3 -c "
+    # Test 2: /api/provider (raw Go backend, for comparison)
+    echo ""
+    echo "  --- GET /api/provider (Go backend endpoint) ---"
+    curl -s -m 10 "http://localhost:$WEB_PORT/api/provider" 2>/dev/null | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
-    print(f'    Config keys: {list(d.keys())}')
-    if 'provider' in d:
-        for n,p in d['provider'].items():
-            print(f'    Provider in config: {n}')
-    if 'model' in d:
-        print(f'    Default model: {d[\"model\"]}')
-except:
-    print('    Could not parse')
+    if isinstance(d, dict):
+        provs = d.get('all', d.get('providers', []))
+        total = len(provs)
+        config_provs = [p for p in provs if p.get('source') == 'config']
+        print(f'  Total: {total}, Config-sourced: {len(config_provs)}')
+        for p in config_provs:
+            print(f'    {p[\"id\"]}: {p.get(\"name\")} ({len(p.get(\"models\",{}))} models)')
+    elif isinstance(d, list):
+        print(f'  Array of {len(d)} providers')
+except Exception as e:
+    print(f'  Error: {e}')
 " 2>/dev/null
 
-    echo "  --- Direct API test (can we reach Expedient?) ---"
-    API_RESP=$(curl -s -m 10 -X POST "https://ai.spencerfane.com/api/chat/completions" \
-      -H "Authorization: Bearer $(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/opencode.json'))['provider']['expedient-ai']['options']['apiKey'])" 2>/dev/null)" \
-      -H "Content-Type: application/json" \
-      -d '{"model":"exp-gpt54-opencode","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}' 2>/dev/null)
-    echo "$API_RESP" | python3 -c "
+    # Test 3: Direct API test
+    echo ""
+    echo "  --- Direct API test (Expedient gateway) ---"
+    API_KEY=$(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/opencode.json'))['provider'][list(json.load(open('$HOME/.config/opencode/opencode.json'))['provider'].keys())[0]]['options']['apiKey'])" 2>/dev/null)
+    API_URL=$(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/opencode.json'))['provider'][list(json.load(open('$HOME/.config/opencode/opencode.json'))['provider'].keys())[0]]['options']['baseURL'])" 2>/dev/null)
+    DEFAULT_MODEL=$(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/opencode.json')).get('model',''))" 2>/dev/null)
+    if [ -n "$API_KEY" ] && [ -n "$API_URL" ]; then
+        API_RESP=$(curl -s -m 10 -X POST "${API_URL}/chat/completions" \
+          -H "Authorization: Bearer $API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{\"model\":\"$DEFAULT_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_tokens\":5}" 2>/dev/null)
+        echo "$API_RESP" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
     if 'choices' in d:
-        print(f'    API WORKS: \"{d[\"choices\"][0][\"message\"][\"content\"]}\"')
+        print(f'  $PASS API works: \"{d[\"choices\"][0][\"message\"][\"content\"]}\"')
     elif 'error' in d:
-        print(f'    API ERROR: {d[\"error\"]}')
+        print(f'  $FAIL API error: {d[\"error\"]}')
     else:
-        print(f'    Unknown response: {str(d)[:100]}')
+        print(f'  $WARN Unknown response: {str(d)[:100]}')
 except:
-    print(f'    Not JSON or timeout')
+    print(f'  $FAIL Not JSON or timeout')
 " 2>/dev/null
-else
-    echo "  Web server NOT RUNNING"
+    else
+        echo "  $WARN Could not extract API credentials from config"
+    fi
+
+    # Test 4: Agent list
+    echo ""
+    echo "  --- Agent list ---"
+    AGENT_RESP=$(curl -s -m 10 "http://localhost:$WEB_PORT/api/agent" 2>/dev/null)
+    echo "$AGENT_RESP" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    if isinstance(d, list):
+        visible = [a for a in d if not a.get('hidden') and not a.get('options',{}).get('hidden')]
+        internal = [a for a in d if a.get('hidden') or a.get('options',{}).get('hidden')]
+        print(f'  Total agents: {len(d)} ({len(visible)} visible, {len(internal)} internal)')
+        for a in visible:
+            print(f'    {a.get(\"name\",\"?\")}: model={a.get(\"model\",\"?\")}')
+        if len(visible) == 0:
+            print(f'  $WARN No visible agents — oh-my-opencode plugin may not be loaded')
+    elif isinstance(d, dict):
+        print(f'  Response keys: {list(d.keys())}')
+    else:
+        print(f'  Unexpected: {type(d).__name__}')
+except Exception as e:
+    print(f'  Error: {e}')
+" 2>/dev/null
 fi
 echo ""
 
-echo "=== 13. Settings (what theme/model the UI uses) ==="
-SETTINGS="$HOME/.config/openchamber/settings.json"
-if [ -f "$SETTINGS" ]; then
-    python3 -c "
+# ==================================================================
+echo "=== 9. Settings ==="
+for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
+    SETTINGS="$DIR/settings.json"
+    if [ -f "$SETTINGS" ]; then
+        python3 -c "
 import json
 s = json.load(open('$SETTINGS'))
-print(f'  defaultModel: {s.get(\"defaultModel\", \"NOT SET\")}')
-print(f'  darkThemeId: {s.get(\"darkThemeId\", \"NOT SET\")}')
-print(f'  activeProjectId: {s.get(\"activeProjectId\", \"NOT SET\")}')
+print(f'  {\"$SETTINGS\"}:')
+print(f'    defaultModel: {s.get(\"defaultModel\", \"NOT SET\")}')
+print(f'    darkThemeId: {s.get(\"darkThemeId\", \"NOT SET\")}')
 " 2>/dev/null
-else
-    echo "  $SETTINGS: MISSING"
-fi
-echo ""
-
-echo "=== 14. PATH ==="
-echo "  \$PATH entries with opencode:"
-echo "$PATH" | tr ':' '\n' | grep -i opencode | while read p; do
-    echo "    $p: $([ -d "$p" ] && echo 'EXISTS' || echo 'NOT FOUND')"
+    fi
 done
 echo ""
 
-echo "=== 15. Asset Files ==="
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "  assets/icon.png: $([ -f "$REPO_DIR/assets/icon.png" ] && echo "$(ls -lh "$REPO_DIR/assets/icon.png" | awk '{print $5}') — $(file "$REPO_DIR/assets/icon.png" | grep -o 'PNG image.*')" || echo 'MISSING')"
-echo "  assets/Icon.png: $([ -f "$REPO_DIR/assets/Icon.png" ] && echo "$(ls -lh "$REPO_DIR/assets/Icon.png" | awk '{print $5}')" || echo 'not present')"
-echo "  assets/logo.png: $([ -f "$REPO_DIR/assets/logo.png" ] && echo "$(ls -lh "$REPO_DIR/assets/logo.png" | awk '{print $5}') — $(file "$REPO_DIR/assets/logo.png" | grep -o 'PNG image.*')" || echo 'MISSING')"
-echo "  assets/Logo.png: $([ -f "$REPO_DIR/assets/Logo.png" ] && echo "$(ls -lh "$REPO_DIR/assets/Logo.png" | awk '{print $5}')" || echo 'not present')"
-echo ""
-
-echo "=== 16. Raw Provider API Response (first 80 lines) ==="
-if [ -n "$WEB_PORT" ]; then
-    curl -s -m 10 "http://localhost:$WEB_PORT/api/provider" 2>/dev/null | python3 -m json.tool 2>/dev/null | head -80
+# ==================================================================
+echo "=== 10. Branding ==="
+if [ -f "$HOME/.cowork-branding.json" ]; then
+    echo "  $PASS $(cat "$HOME/.cowork-branding.json")"
 else
-    echo "  Web server not running — skipped"
+    echo "  $WARN ~/.cowork-branding.json MISSING"
 fi
 echo ""
 
-echo "=== 17. Electron main.cjs Config ==="
-if [ -f "$BD/electron/main.cjs" ]; then
-    echo "  App name from main.cjs:"
-    grep -i "appName\|productName\|app\.name\|BrowserWindow\|loadURL" "$BD/electron/main.cjs" 2>/dev/null | head -5 | while read line; do
-        echo "    $line"
-    done
-    echo "  Icon references in main.cjs:"
-    grep -i "icon\|\.icns\|\.ico\|\.png" "$BD/electron/main.cjs" 2>/dev/null | head -5 | while read line; do
-        echo "    $line"
-    done
+# ==================================================================
+echo "=== 11. Sandbox (CLAUDE.md) ==="
+PROJ_DIR=""
+[ -n "$BRAND_APP" ] && [ -d "$HOME/$BRAND_APP Projects" ] && PROJ_DIR="$HOME/$BRAND_APP Projects"
+if [ -n "$PROJ_DIR" ]; then
+    echo "  $PASS Project dir: $PROJ_DIR"
+    [ -f "$PROJ_DIR/CLAUDE.md" ] && echo "  $PASS CLAUDE.md: $(wc -l < "$PROJ_DIR/CLAUDE.md" | tr -d ' ') lines" || echo "  $WARN CLAUDE.md missing in project dir"
 else
-    echo "  MISSING"
+    echo "  $WARN No project directory found"
 fi
 echo ""
 
-echo "=== 18. Cowork Logo in Build ==="
-echo "  packages/web/public/cowork-logo.png: $([ -f "$BD/packages/web/public/cowork-logo.png" ] && echo "EXISTS ($(ls -lh "$BD/packages/web/public/cowork-logo.png" | awk '{print $5}'))" || echo 'MISSING')"
-echo "  packages/web/public/favicon.ico: $([ -f "$BD/packages/web/public/favicon.ico" ] && echo "EXISTS ($(ls -lh "$BD/packages/web/public/favicon.ico" | awk '{print $5}'))" || echo 'MISSING or default')"
-echo "  dist/cowork-logo.png: $([ -f "$BD/packages/web/dist/cowork-logo.png" ] && echo "EXISTS" || echo 'MISSING (not copied to dist!)')"
-echo "  Icon in extraResources: $(ls "$BD/build/"*.icns 2>/dev/null | head -1 || echo 'NONE')"
+# ==================================================================
+echo "=== 12. Icon Fix (if needed) ==="
+echo "  To manually fix the dock icon:"
+echo "    1. Find your icon.png (512x512+ square PNG)"
+echo "    2. Run these commands:"
+echo "       ICONSET=\$(mktemp -d)/App.iconset && mkdir -p \"\$ICONSET\""
+echo "       for s in 16 32 64 128 256 512 1024; do sips -z \$s \$s icon.png --out \"\$ICONSET/icon_\${s}x\${s}.png\" >/dev/null 2>&1; done"
+echo "       iconutil -c icns \"\$ICONSET\" -o custom.icns"
+echo "       cp custom.icns \"$APP/Contents/Resources/\$(defaults read \"$APP/Contents/Info.plist\" CFBundleIconFile 2>/dev/null)\""
+echo "       sudo rm -rf /Library/Caches/com.apple.iconservices.store && killall Dock"
 echo ""
 
 echo "============================================================"
-echo "  Diagnostic complete. Share this entire output."
+echo "  Diagnostic complete."
 echo "============================================================"
