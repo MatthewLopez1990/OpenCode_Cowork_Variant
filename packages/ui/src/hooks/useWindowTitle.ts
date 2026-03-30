@@ -3,7 +3,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 
-const APP_TITLE = 'SF Steward';
+const APP_TITLE = 'OpenCode Cowork';
 
 const formatProjectLabel = (label: string): string => {
   return label.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());

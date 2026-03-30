@@ -93,7 +93,7 @@ const MERMAID_RENDERING_OPTIONS: Option<'svg' | 'ascii'>[] = [
     },
 ];
 
-const DEFAULT_PWA_INSTALL_NAME = 'SF Steward - AI Coding Assistant';
+const DEFAULT_PWA_INSTALL_NAME = 'OpenCode - AI Coding Assistant';
 
 type PwaInstallNameWindow = Window & {
     __OPENCHAMBER_SET_PWA_INSTALL_NAME__?: (value: string) => string;

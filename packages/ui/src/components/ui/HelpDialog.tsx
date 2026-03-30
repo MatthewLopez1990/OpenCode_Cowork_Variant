@@ -223,7 +223,7 @@ export const HelpDialog: React.FC = () => {
             Keyboard Shortcuts
           </DialogTitle>
           <DialogDescription>
-            Use these keyboard shortcuts to navigate SF Steward efficiently
+            Use these keyboard shortcuts to navigate OpenCode efficiently
           </DialogDescription>
         </DialogHeader>
 

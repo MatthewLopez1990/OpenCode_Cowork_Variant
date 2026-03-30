@@ -1,12 +1,12 @@
 {
-  "name": "@sf-steward/web",
+  "name": "@opencode-cowork/web",
   "version": "1.0.0",
   "private": false,
   "type": "module",
   "main": "./server/index.js",
   "types": "./server/index.d.ts",
   "bin": {
-    "sf-steward": "./bin/cli.js"
+    "opencode-cowork": "./bin/cli.js"
   },
   "publishConfig": {
     "access": "public"

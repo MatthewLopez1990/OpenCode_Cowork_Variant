@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
-  "productName": "SF Steward",
+  "productName": "OpenCode Cowork",
   "version": "1.0.0",
-  "identifier": "com.spencerfane.sf-steward",
+  "identifier": "com.cowork.opencode",
   "build": {
     "beforeDevCommand": "node ./scripts/dev-web-server.mjs",
     "beforeBuildCommand": "bun run build:sidecar",
@@ -14,7 +14,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "SF Steward",
+        "title": "OpenCode Cowork",
         "transparent": false,
         "width": 1280,
         "height": 800,
@@ -41,7 +41,7 @@
   "bundle": {
     "active": true,
     "externalBin": [
-      "sidecars/sf-steward-server"
+      "sidecars/opencode-cowork-server"
     ],
     "resources": [
       "resources/web-dist/**/*"
@@ -76,7 +76,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/spencerfane/sf-steward/releases/latest/download/latest.json"
+        "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIwRDMyQUQzNjNFRTc1ODIKUldTQ2RlNWoweXJUSUdpVWVWNm84R1pHamYzNVFhYWgyWmlpWFVzem5nUTlHd1dlRlNTV0FFc3IK"
     }

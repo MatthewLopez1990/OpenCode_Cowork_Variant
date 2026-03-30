@@ -38,8 +38,8 @@ const inferTargetTriple = () => {
 
 const targetTriple = inferTargetTriple();
 const sidecarBaseName = process.platform === 'win32'
-  ? `sf-steward-server-${targetTriple}.exe`
-  : `sf-steward-server-${targetTriple}`;
+  ? `opencode-cowork-server-${targetTriple}.exe`
+  : `opencode-cowork-server-${targetTriple}`;
 const sidecarOutPath = path.join(sidecarsDir, sidecarBaseName);
 
 
@@ -93,7 +93,7 @@ await fs.mkdir(resourcesDir, { recursive: true });
 await fs.rm(resourcesWebDistDir, { recursive: true, force: true });
 await copyDir(webDistDir, resourcesWebDistDir);
 
-console.log('[desktop] building sf-steward-server sidecar...');
+console.log('[desktop] building opencode-cowork-server sidecar...');
 await fs.mkdir(sidecarsDir, { recursive: true });
 
 run(bunExe, [

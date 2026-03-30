@@ -114,7 +114,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <OpenChamberLogo width={64} height={64} />
 
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">SF Steward</h2>
+            <h2 className="text-lg font-semibold">OpenCode</h2>
             {displayVersion && (
               <p className="typography-meta text-muted-foreground">
                 Version {displayVersion}
@@ -130,7 +130,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               rel="noopener noreferrer"
               className="hover:text-foreground transition-colors"
             >
-              SF Steward
+              OpenCode
             </a>{' '}
             agent
           </p>
@@ -152,7 +152,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   : 'Copy diagnostics'}
             </button>
             <p className="typography-micro text-muted-foreground">
-              Includes SF Steward state, SF Steward health, directories, and projects.
+              Includes OpenCode state, OpenCode health, directories, and projects.
             </p>
           </div>
 

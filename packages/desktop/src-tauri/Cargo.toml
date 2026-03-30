@@ -1,11 +1,11 @@
 [package]
-name = "sf-steward-desktop"
+name = "opencode-cowork-desktop"
 version = "1.0.0"
 edition = "2021"
 publish = false
 
 [[bin]]
-name = "sf-steward-desktop"
+name = "opencode-cowork-desktop"
 path = "src/main.rs"
 
 [features]

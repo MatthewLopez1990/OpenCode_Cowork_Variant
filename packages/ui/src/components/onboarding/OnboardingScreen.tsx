@@ -151,7 +151,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
 
     try {
       const selected = await tauri.dialog.open({
-        title: 'Select SF Steward binary',
+        title: 'Select OpenCode binary',
         multiple: false,
         directory: false,
       });
@@ -200,10 +200,10 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
   const docsUrl = platform === 'windows' ? WINDOWS_WSL_DOCS_URL : DOCS_URL;
   const binaryPlaceholder =
     platform === 'windows'
-      ? 'C:\\Users\\you\\AppData\\Roaming\\npm\\sf-steward.cmd'
+      ? 'C:\\Users\\you\\AppData\\Roaming\\npm\\opencode.cmd'
       : platform === 'linux'
-        ? '/home/you/.bun/bin/sf-steward'
-        : '/Users/you/.bun/bin/sf-steward';
+        ? '/home/you/.bun/bin/opencode'
+        : '/Users/you/.bun/bin/opencode';
 
   return (
     <div
@@ -213,7 +213,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
       <div className="w-full space-y-4 text-center">
         <div className="space-y-4">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Welcome to SF Steward
+            Welcome to OpenCode
           </h1>
           <p className="text-muted-foreground">
             <a
@@ -222,7 +222,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
               rel="noopener noreferrer"
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
-              SF Steward CLI
+              OpenCode CLI
               <RiExternalLinkLine className="h-4 w-4" />
             </a>
             {' '}is required to continue.
@@ -235,7 +235,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
               <li>Install WSL (if needed) with <code className="text-foreground/80">wsl --install</code> in PowerShell.</li>
               <li>Run the install command below inside your WSL terminal.</li>
-              <li>If SF Steward does not detect SF Steward automatically, set the binary path below.</li>
+              <li>If OpenCode does not detect OpenCode automatically, set the binary path below.</li>
             </ol>
           </div>
         )}
@@ -264,7 +264,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
         </a>
 
         <p className="text-sm text-muted-foreground animate-pulse">
-          Waiting for SF Steward installation...
+          Waiting for OpenCode installation...
         </p>
 
         <div className="flex justify-center">
@@ -280,7 +280,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
 
         <div className="mx-auto w-full max-w-xl pt-4">
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Already installed? Set the SF Steward CLI path:</div>
+            <div className="text-sm text-muted-foreground">Already installed? Set the OpenCode CLI path:</div>
             <div className="flex gap-2">
               <Input
                 value={opencodeBinary}
@@ -305,7 +305,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
                 Apply
               </Button>
             </div>
-            <div className="text-xs text-muted-foreground/70">Saves to SF Steward settings and reloads SF Steward configuration.</div>
+            <div className="text-xs text-muted-foreground/70">Saves to OpenCode settings and reloads OpenCode configuration.</div>
           </div>
         </div>
       </div>
@@ -315,16 +315,16 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
           {platform === 'windows' ? (
             <>
               <p className="text-sm text-muted-foreground/70">
-                On Windows, install and run SF Steward in WSL for best compatibility.
+                On Windows, install and run OpenCode in WSL for best compatibility.
               </p>
               <p className="text-sm text-muted-foreground/70">
-                If detection fails, set a native path (<code className="text-foreground/70">sf-steward.cmd</code>/<code className="text-foreground/70">sf-steward.exe</code>), <code className="text-foreground/70">wsl.exe</code>, or <code className="text-foreground/70">wsl:/usr/local/bin/sf-steward</code>.
+                If detection fails, set a native path (<code className="text-foreground/70">opencode.cmd</code>/<code className="text-foreground/70">opencode.exe</code>), <code className="text-foreground/70">wsl.exe</code>, or <code className="text-foreground/70">wsl:/usr/local/bin/opencode</code>.
               </p>
             </>
           ) : (
             <>
               <p className="text-sm text-muted-foreground/70">
-                Already installed? Make sure <code className="text-foreground/70">sf-steward</code> is in your PATH
+                Already installed? Make sure <code className="text-foreground/70">opencode</code> is in your PATH
               </p>
               <p className="text-sm text-muted-foreground/70">
                 or set <code className="text-foreground/70">OPENCODE_BINARY</code> environment variable.

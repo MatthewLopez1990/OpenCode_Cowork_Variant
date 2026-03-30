@@ -23,7 +23,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     {
         id: 'agents',
         label: 'Agents',
-        description: 'Configure SF Steward agents, prompts, and permissions.',
+        description: 'Configure agents, prompts, and permissions.',
         icon: RiBrainAi3Line,
     },
     {
@@ -64,8 +64,8 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     },
     {
         id: 'settings',
-        label: 'SF Steward',
-        description: 'SF Steward app settings: themes, fonts, and preferences.',
+        label: 'Settings',
+        description: 'App settings: themes, fonts, and preferences.',
         icon: RiSettings3Line,
     },
 ];

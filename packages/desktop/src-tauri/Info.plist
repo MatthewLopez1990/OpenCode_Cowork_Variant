@@ -7,17 +7,17 @@
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>SF Steward needs to run the backend to provide AI legal assistance.</string>
+	<string>OpenCode Cowork needs to run the backend to provide AI assistance.</string>
 	<key>NSDesktopFolderUsageDescription</key>
-	<string>SF Steward needs access to work with your projects.</string>
+	<string>OpenCode Cowork needs access to work with your projects.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>SF Steward needs access to work with your projects.</string>
+	<string>OpenCode Cowork needs access to work with your projects.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
-	<string>SF Steward needs access to work with your projects.</string>
+	<string>OpenCode Cowork needs access to work with your projects.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>SF Steward needs microphone access for voice input.</string>
+	<string>OpenCode Cowork needs microphone access for voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>SF Steward needs speech recognition to transcribe voice input.</string>
+	<string>OpenCode Cowork needs speech recognition to transcribe voice input.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>

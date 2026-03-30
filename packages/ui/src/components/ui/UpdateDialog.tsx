@@ -211,7 +211,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
     : 0;
 
   const isWebRuntime = runtimeType === 'web';
-  const updateCommand = info?.updateCommand || 'sf-steward update';
+  const updateCommand = info?.updateCommand || 'opencode update';
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -275,7 +275,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
       window.location.reload();
     } else {
       setWebUpdateState('error');
-      setWebError('Update is taking longer than expected. Wait a bit and refresh, or run: sf-steward update');
+      setWebError('Update is taking longer than expected. Wait a bit and refresh, or run: opencode update');
     }
   }, [info?.currentVersion]);
 
@@ -323,7 +323,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             <RiDownloadCloudLine className="h-5 w-5 text-[var(--primary-base)]" />
             <span className="text-lg font-semibold text-foreground">
               {webUpdateState === 'restarting' || webUpdateState === 'reconnecting'
-                ? 'Updating SF Steward...'
+                ? 'Updating OpenCode...'
                 : 'Update Available'}
             </span>
           </DialogTitle>
