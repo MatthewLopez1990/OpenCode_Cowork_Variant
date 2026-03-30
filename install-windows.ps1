@@ -197,7 +197,7 @@ Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NA
 
 # Install and build
 Write-Host "  Adding Electron dependencies..."
-bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | Select-Object -Last 1
+bun add --dev electron@latest electron-builder@24.13.3 electron-store@latest electron-context-menu@latest 2>&1 | Select-Object -Last 1
 Write-Host "  Installing all dependencies..."
 bun install 2>&1 | Select-Object -Last 1
 Write-Host "  Building frontend..."

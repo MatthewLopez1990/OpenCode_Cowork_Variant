@@ -282,7 +282,7 @@ echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.
 # -- 3h: Install dependencies and build --
 echo -e "  Adding Electron dependencies..."
 cd "$BUILD_DIR"
-bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
+bun add --dev electron@latest electron-builder@24.13.3 electron-store@latest electron-context-menu@latest 2>&1 | tail -1
 
 echo -e "  Installing all dependencies..."
 bun install 2>&1 | tail -1
