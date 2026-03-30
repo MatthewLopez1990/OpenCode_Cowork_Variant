@@ -249,7 +249,7 @@ SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
 cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
 echo -e "${GREEN}✓${NC} CLAUDE_TEMPLATE.md deployed to server"
 
-# Only inject the JS function if it doesn't already exist (SF Steward fork already has it)
+# Only inject the JS function if it doesn't already exist (Cowork fork already has it)
 if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
 
     # Inject the sandbox function into the server code

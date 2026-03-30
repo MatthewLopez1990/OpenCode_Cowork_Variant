@@ -1,0 +1,76 @@
+{
+  "models": {
+    "exp-gpt53codex-opencode": {
+      "name": "GPT-5.3 Codex",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "options": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "parallel_tool_calls": false
+      }
+    },
+    "gpt-5.2-opencode": {
+      "name": "GPT-5.2",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "options": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_tokens": 16384,
+        "parallel_tool_calls": false
+      }
+    },
+    "claude-sonnet-4-5-opencode": {
+      "name": "Claude 4.5 Sonnet",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "options": {
+        "temperature": 0.7,
+        "max_tokens": 16384,
+        "parallel_tool_calls": false
+      }
+    },
+    "claude-sonnet-4-6-opencode": {
+      "name": "Claude 4.6 Sonnet",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "options": {
+        "temperature": 0.7,
+        "max_tokens": 16384,
+        "parallel_tool_calls": false
+      }
+    },
+    "claude-opus-4-6-opencode": {
+      "name": "Claude 4.6 Opus",
+      "tool_call": true,
+      "attachment": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "options": {
+        "temperature": 0.7,
+        "max_tokens": 16384,
+        "parallel_tool_calls": false
+      }
+    }
+  }
+}
