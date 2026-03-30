@@ -444,37 +444,24 @@ if provs: print(provs[0].get('id',''))
               -H "x-opencode-directory: $PROJECT_DIR" \
               -d "{\"parts\":[{\"type\":\"text\",\"text\":\"Say hi\"}],\"providerID\":\"$PROV_ID\",\"modelID\":\"$MODEL_ID\"}" 2>/dev/null)
 
-            MSG_STATUS=$?
-            if [ $MSG_STATUS -ne 0 ]; then
-                echo "  $F Message send failed (curl error $MSG_STATUS)"
-            elif [ -z "$MSG_RESP" ]; then
-                echo "  $F Empty response from message send"
-                echo "     WHY: The server may not be proxying to the Go backend,"
-                echo "          or the Go backend crashed when processing the request."
-            else
-                MSG_LEN=${#MSG_RESP}
-                # Check for error in response
-                echo "$MSG_RESP" | head -c 500 | python3 -c "
-import sys
-data = sys.stdin.read()
-if 'error' in data.lower() and 'Error' in data:
-    # Find the error
-    import re
-    errs = re.findall(r'\"error\":\s*\"([^\"]+)\"', data)
-    if errs:
-        print(f'  $F Message error: {errs[0]}')
-    else:
-        print(f'  $F Response contains error: {data[:200]}')
-elif len(data) > 10:
-    print(f'  $P Message sent ({len(data)} bytes response)')
-    # Show first event
-    lines = data.strip().split(chr(10))
-    for l in lines[:3]:
-        if l.strip():
-            print(f'    {l[:120]}')
-else:
-    print(f'  $W Short response: {data}')
-" 2>/dev/null
+            if true; then
+                # HTTP status check — 200 with empty body is NORMAL (async via SSE)
+                MSG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST "http://localhost:$WEB_PORT/api/session/$SESS_ID/message" \
+                  -H "Content-Type: application/json" \
+                  -H "x-opencode-directory: $PROJECT_DIR" \
+                  -d "{\"parts\":[{\"type\":\"text\",\"text\":\"Say hello\"}],\"providerID\":\"$PROV_ID\",\"modelID\":\"$MODEL_ID\"}" 2>/dev/null)
+                if [ "$MSG_HTTP" = "200" ]; then
+                    echo "  $P Message accepted (HTTP 200 — response comes via SSE)"
+                elif [ "$MSG_HTTP" = "503" ] || [ "$MSG_HTTP" = "504" ]; then
+                    echo "  $F Message failed (HTTP $MSG_HTTP — OpenCode backend unavailable)"
+                    echo "     WHY: The Go backend may have crashed or timed out."
+                elif [ -n "$MSG_HTTP" ]; then
+                    echo "  $F Message failed (HTTP $MSG_HTTP)"
+                    echo "     Response: $(echo "$MSG_RESP" | head -c 200)"
+                else
+                    echo "  $F Message send failed (no HTTP response)"
+                    echo "     WHY: Could not connect to the server."
+                fi
             fi
         fi
     fi

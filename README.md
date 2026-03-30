@@ -40,7 +40,7 @@ Drop your organization's logos into the `assets/` folder:
 | `assets/icon.png` | Favicon, desktop shortcut, top-left corner of the app |
 | `assets/logo.png` | Landing page center logo |
 
-**Any image size works** — the installer automatically resizes the icon to all required dimensions (512, 256, 32, 16px). Just drop your PNG files and run the installer. If not provided, the app uses default icons.
+**Icon must be at least 512x512 pixels** (1024x1024 recommended for Retina displays). The installer automatically resizes to all required dimensions. Smaller icons (e.g., 200x200) will be rejected by macOS `iconutil` and the app will show the default Electron icon. If not provided, the app uses default icons.
 
 ### Step 2: Customize your rules (optional but recommended)
 
@@ -295,8 +295,9 @@ OpenCode_Cowork_Variant/
 │       ├── sox-testing/
 │       └── audit-support/
 ├── config/
-│   ├── opencode.json.template    # API config template
-│   └── models.json.example       # Example for adding models
+│   ├── opencode.json.template    # API config template (uses placeholders)
+│   ├── models.json               # Extra Expedient models (auto-merged)
+│   └── models.json.example       # Example for adding your own models
 ├── electron/
 │   └── main.cjs                  # Desktop app + sandbox injection
 ├── electron-builder.json
@@ -309,9 +310,40 @@ OpenCode_Cowork_Variant/
 ├── uninstall-macos.sh
 ├── uninstall-linux.sh
 ├── opencode.md                   # Agent rules
+├── diagnose-macos.sh             # Diagnostic script (12 checks + API tests)
+├── fix-macos.sh                  # Quick-fix for existing installs
 ├── .gitignore
 └── README.md
 ```
+
+## Troubleshooting
+
+Run the diagnostic while the app is open:
+
+```bash
+./diagnose-macos.sh
+```
+
+The diagnostic checks 12 components and explains WHY each failure occurs with exact fix commands. Key checks:
+
+| Section | What it tests |
+|---------|--------------|
+| Config file | Valid JSON, no crash-causing keys, model exists in provider |
+| App bundle | Custom icon vs Electron default (hash comparison) |
+| Settings & Project | Project entry with activeProjectId (required for sessions) |
+| Server API | Provider endpoint, agent list, direct API test |
+| Session + Message | Creates a session and sends a test message through the full stack |
+| Asset files | Icon dimensions (must be 512x512+) |
+
+### Common issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "No models found" | Server filter on wrong endpoint | Update server from repo |
+| "Not selected" (model) | Provider not loading | Check config, npm SDK |
+| Sessions fail | No project in settings | Re-run installer (adds project entry) |
+| Default Electron icon | Icon < 512x512 or iconutil failed | Provide 512x512+ PNG |
+| No agents in dropdown | Plugin not loaded yet | Close and reopen app |
 
 ## License
 
