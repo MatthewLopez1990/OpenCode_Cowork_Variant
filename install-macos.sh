@@ -204,6 +204,13 @@ if [ -f "$INDEX_HTML" ]; then
     sed -i '' "s|const defaultShortName = '[^']*'|const defaultShortName = '$APP_NAME'|g" "$INDEX_HTML" 2>/dev/null
 fi
 
+# Also patch the React useWindowTitle hook (compiled into JS bundle)
+WINDOW_TITLE_TS="$BUILD_DIR/packages/ui/src/hooks/useWindowTitle.ts"
+if [ -f "$WINDOW_TITLE_TS" ]; then
+    sed -i '' "s|const APP_TITLE = '[^']*'|const APP_TITLE = '$APP_NAME'|g" "$WINDOW_TITLE_TS" 2>/dev/null
+    echo -e "${GREEN}✓${NC} Window title patched"
+fi
+
 # -- 3e: Update electron-builder.json with correct paths --
 echo -e "  Updating build configuration..."
 python3 -c "

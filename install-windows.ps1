@@ -142,6 +142,14 @@ if (Test-Path $INDEX_HTML) {
     $htmlContent = $htmlContent -replace 'alt="Loading"', "alt=`"$APP_NAME`""
     $htmlContent = $htmlContent -replace "const defaultAppName = '[^']*'", "const defaultAppName = '$APP_NAME'"
     $htmlContent = $htmlContent -replace "const defaultShortName = '[^']*'", "const defaultShortName = '$APP_NAME'"
+    # Patch React useWindowTitle hook
+    $windowTitleTs = "$BUILD_DIR\packages\ui\src\hooks\useWindowTitle.ts"
+    if (Test-Path $windowTitleTs) {
+        $tsContent = Get-Content $windowTitleTs -Raw
+        $tsContent = $tsContent -replace "const APP_TITLE = '[^']*'", "const APP_TITLE = '$APP_NAME'"
+        Set-Content $windowTitleTs $tsContent -Encoding UTF8
+        Write-Ok "Window title patched"
+    }
     if ($LOGO_ASSET) {
         Copy-Item $LOGO_ASSET.FullName "$BUILD_DIR\packages\web\public\cowork-logo.png" -Force
         $htmlContent = $htmlContent -replace 'src="[^"]*logo[^"]*\.svg"', 'src="/cowork-logo.png"'

@@ -3,32 +3,105 @@
   "plugin": [
     "oh-my-opencode@latest"
   ],
-  "model": "__DEFAULT_MODEL__",
+  "model": "exp-gpt54-opencode",
   "agent": {
     "plan": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "claude-opus-4-6-opencode",
       "options": {}
     },
     "build": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "exp-gpt54-opencode",
       "options": {}
     },
     "title": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "claude-sonnet-4-5-opencode",
       "options": {}
     },
     "summary": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "claude-sonnet-4-5-opencode",
       "options": {}
     }
   },
   "provider": {
-    "__PROVIDER_NAME__": {
-      "name": "__DISPLAY_NAME__",
+    "expedient-ai": {
+      "name": "Expedient AI",
       "npm": "@ai-sdk/openai-compatible",
       "models": {
-        "__DEFAULT_MODEL__": {
-          "name": "__DEFAULT_MODEL_DISPLAY__",
+        "exp-gpt54-opencode": {
+          "name": "GPT-5.4 (Expedient)",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        },
+        "exp-gpt53codex-opencode": {
+          "name": "GPT-5.3 Codex (Expedient)",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        },
+        "gpt-5.2-opencode": {
+          "name": "GPT-5.2 (Expedient)",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        },
+        "claude-sonnet-4-5-opencode": {
+          "name": "Claude 4.5 Sonnet (Expedient)",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        },
+        "claude-sonnet-4-6-opencode": {
+          "name": "Claude 4.6 Sonnet (Expedient)",
+          "tool_call": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "temperature": 0.7,
+            "max_tokens": 16384,
+            "parallel_tool_calls": false
+          }
+        },
+        "claude-opus-4-6-opencode": {
+          "name": "Claude 4.6 Opus (Expedient)",
           "tool_call": true,
           "attachment": true,
           "modalities": {
