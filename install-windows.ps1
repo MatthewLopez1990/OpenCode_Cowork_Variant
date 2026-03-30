@@ -369,11 +369,29 @@ Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
 
 Write-Ok "Default project: $DEFAULT_PROJECT"
 
-# Settings
+# Settings — must include a project entry or the app can't create sessions
+$PROJECT_UUID = [guid]::NewGuid().ToString()
+$PROJECT_TS = [long]([datetime]::UtcNow - [datetime]'1970-01-01').TotalMilliseconds
+$PROJECT_PATH_JSON = ($DEFAULT_PROJECT -replace '\\', '\\')
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    Write-Utf8NoBom "$dir\settings.json" "{`"defaultModel`":`"${PROVIDER_NAME}:${DEFAULT_MODEL}`"}"
+    $settingsJson = @"
+{
+  "defaultModel": "${PROVIDER_NAME}:${DEFAULT_MODEL}",
+  "projects": [
+    {
+      "id": "$PROJECT_UUID",
+      "path": "$PROJECT_PATH_JSON",
+      "addedAt": $PROJECT_TS,
+      "lastOpenedAt": $PROJECT_TS
+    }
+  ],
+  "activeProjectId": "$PROJECT_UUID"
 }
+"@
+    Write-Utf8NoBom "$dir\settings.json" $settingsJson
+}
+Write-Ok "Default project registered in settings"
 
 [System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $API_KEY, "User")
 $env:COWORK_API_KEY = $API_KEY

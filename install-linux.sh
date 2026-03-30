@@ -380,11 +380,30 @@ cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
 
 echo -e "${GREEN}*${NC} Default project: $DEFAULT_PROJECT"
 
-# Settings
+# Settings — must include a project entry or the app can't create sessions
+PROJECT_UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+PROJECT_TS=$(python3 -c "import time; print(int(time.time()*1000))")
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
     mkdir -p "$DIR"
-    echo "{\"defaultModel\":\"${PROVIDER_NAME}:${DEFAULT_MODEL}\"}" > "$DIR/settings.json"
+    python3 -c "
+import json
+settings = {
+    'defaultModel': '${PROVIDER_NAME}:${DEFAULT_MODEL}',
+    'projects': [
+        {
+            'id': '$PROJECT_UUID',
+            'path': '$DEFAULT_PROJECT',
+            'addedAt': $PROJECT_TS,
+            'lastOpenedAt': $PROJECT_TS
+        }
+    ],
+    'activeProjectId': '$PROJECT_UUID'
+}
+with open('$DIR/settings.json', 'w') as f:
+    json.dump(settings, f, indent=2)
+"
 done
+echo -e "${GREEN}*${NC} Default project registered in settings"
 
 SHELL_PROFILE="$HOME/.bashrc"
 [ -f "$HOME/.zshrc" ] && SHELL_PROFILE="$HOME/.zshrc"
