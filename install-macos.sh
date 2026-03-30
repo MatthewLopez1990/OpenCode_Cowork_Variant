@@ -129,15 +129,24 @@ fi
 # Save branding
 echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
 
-# Apply branding assets from the assets/ folder
+# Apply branding assets from the assets/ folder (auto-resize with sips)
 mkdir -p "$BUILD_DIR/branding"
 if [ -f "$ICON_ASSET" ]; then
     cp "$ICON_ASSET" "$BUILD_DIR/branding/icon.png"
-    # Copy to all standard icon locations
+    # Auto-resize icon to standard sizes using macOS built-in sips
+    sips -z 512 512 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
+    sips -z 256 256 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-256.png" 2>/dev/null
+    sips -z 32 32 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-32.png" 2>/dev/null
+    sips -z 16 16 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-16.png" 2>/dev/null
+    # Copy resized icons to standard locations
     for DIR in "$BUILD_DIR/packages/web/public" "$BUILD_DIR/packages/desktop/src-tauri/icons"; do
-        [ -d "$DIR" ] && cp "$ICON_ASSET" "$DIR/favicon.png" 2>/dev/null && cp "$ICON_ASSET" "$DIR/icon.png" 2>/dev/null
+        if [ -d "$DIR" ]; then
+            cp "$BUILD_DIR/branding/icon-32.png" "$DIR/favicon.png" 2>/dev/null
+            cp "$BUILD_DIR/branding/icon-512.png" "$DIR/icon.png" 2>/dev/null
+            cp "$BUILD_DIR/branding/icon-256.png" "$DIR/icon-256.png" 2>/dev/null
+        fi
     done
-    echo -e "${GREEN}✓${NC} Custom icon applied"
+    echo -e "${GREEN}✓${NC} Custom icon applied (auto-resized to 512, 256, 32, 16)"
 fi
 if [ -f "$LOGO_ASSET" ]; then
     cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/logo.png" 2>/dev/null

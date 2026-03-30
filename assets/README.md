@@ -4,14 +4,15 @@ Place your organization's logos here before running the install script.
 
 ## Required Files
 
-| File | Purpose | Recommended Size |
-|------|---------|-----------------|
-| `icon.png` | Favicon, desktop shortcut icon, top-left corner of the app | 512x512 PNG |
-| `logo.png` | Landing page center logo (shown when the app first opens) | 800x200 or larger PNG |
+| File | Purpose |
+|------|---------|
+| `icon.png` | Favicon, desktop shortcut icon, top-left corner of the app |
+| `logo.png` | Landing page center logo (shown when the app first opens) |
 
 ## Notes
 
-- Both files are **optional** — the app will use default OpenChamber icons if not provided
-- The install script automatically detects these files and applies them during build
-- No URL entry needed — just drop the files here and run the installer
-- Supported formats: PNG (recommended), ICO (icon only), WebP (logo only)
+- **Any size works** — the installer automatically resizes the icon to 512x512, 256x256, 32x32, and 16x16
+- The logo is used as-is (no resizing needed for the landing page)
+- Both files are **optional** — the app uses default icons if not provided
+- Supported format: **PNG** (recommended for both)
+- Just drop the files here and run the installer — no manual resizing needed

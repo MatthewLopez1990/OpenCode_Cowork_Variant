@@ -134,14 +134,40 @@ fi
 
 echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
 
-# Apply branding assets from the assets/ folder
+# Apply branding assets from the assets/ folder (auto-resize)
 mkdir -p "$BUILD_DIR/branding"
 if [ -f "$ICON_ASSET" ]; then
     cp "$ICON_ASSET" "$BUILD_DIR/branding/icon.png"
+    # Auto-resize using Python PIL (most reliable on Linux)
+    python3 -c "
+from PIL import Image
+import sys
+try:
+    img = Image.open('$ICON_ASSET')
+    for size in [512, 256, 32, 16]:
+        resized = img.resize((size, size), Image.LANCZOS)
+        resized.save('$BUILD_DIR/branding/icon-' + str(size) + '.png')
+except ImportError:
+    sys.exit(1)
+" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        # Fallback: try ImageMagick
+        if command -v convert &>/dev/null; then
+            convert "$ICON_ASSET" -resize 512x512 "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
+            convert "$ICON_ASSET" -resize 32x32 "$BUILD_DIR/branding/icon-32.png" 2>/dev/null
+        else
+            # No resize tools — copy as-is
+            cp "$ICON_ASSET" "$BUILD_DIR/branding/icon-512.png"
+            cp "$ICON_ASSET" "$BUILD_DIR/branding/icon-32.png"
+        fi
+    fi
     for DIR in "$BUILD_DIR/packages/web/public" "$BUILD_DIR/packages/desktop/src-tauri/icons"; do
-        [ -d "$DIR" ] && cp "$ICON_ASSET" "$DIR/favicon.png" 2>/dev/null && cp "$ICON_ASSET" "$DIR/icon.png" 2>/dev/null
+        if [ -d "$DIR" ]; then
+            cp "$BUILD_DIR/branding/icon-32.png" "$DIR/favicon.png" 2>/dev/null
+            cp "$BUILD_DIR/branding/icon-512.png" "$DIR/icon.png" 2>/dev/null
+        fi
     done
-    echo -e "${GREEN}✓${NC} Custom icon applied"
+    echo -e "${GREEN}✓${NC} Custom icon applied (auto-resized)"
 fi
 if [ -f "$LOGO_ASSET" ]; then
     cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/logo.png" 2>/dev/null

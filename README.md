@@ -35,12 +35,12 @@ cd OpenCode_Cowork_Variant
 
 Drop your organization's logos into the `assets/` folder:
 
-| File | Purpose | Recommended Size |
-|------|---------|-----------------|
-| `assets/icon.png` | Favicon, desktop shortcut, top-left corner of the app | 512x512 PNG |
-| `assets/logo.png` | Landing page center logo | 800x200 or larger PNG |
+| File | Purpose |
+|------|---------|
+| `assets/icon.png` | Favicon, desktop shortcut, top-left corner of the app |
+| `assets/logo.png` | Landing page center logo |
 
-The installer automatically detects these files and applies them during build. No URL entry needed — just drop the files and run the installer. If not provided, the app uses default OpenChamber icons.
+**Any image size works** — the installer automatically resizes the icon to all required dimensions (512, 256, 32, 16px). Just drop your PNG files and run the installer. If not provided, the app uses default icons.
 
 ### Step 2: Customize your rules (optional but recommended)
 

@@ -140,22 +140,40 @@ if (Test-Path $pkgPath) {
 $brandingJson = @{ appName = $APP_NAME; provider = $PROVIDER_DISPLAY } | ConvertTo-Json
 Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" $brandingJson
 
-# Apply branding assets from the assets/ folder
+# Apply branding assets from the assets/ folder (auto-resize with .NET)
 New-Item -ItemType Directory -Force -Path "$BUILD_DIR\branding" | Out-Null
+
+# Helper: resize an image using .NET System.Drawing
+function Resize-Image($Source, $Dest, $Width, $Height) {
+    try {
+        Add-Type -AssemblyName System.Drawing
+        $src = [System.Drawing.Image]::FromFile($Source)
+        $bmp = New-Object System.Drawing.Bitmap($Width, $Height)
+        $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+        $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $gfx.DrawImage($src, 0, 0, $Width, $Height)
+        $bmp.Save($Dest, [System.Drawing.Imaging.ImageFormat]::Png)
+        $gfx.Dispose(); $bmp.Dispose(); $src.Dispose()
+    } catch {}
+}
+
 if (Test-Path $ICON_ASSET) {
     Copy-Item $ICON_ASSET "$BUILD_DIR\branding\icon.png" -Force
+    # Auto-resize to standard sizes
+    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-512.png" 512 512
+    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-256.png" 256 256
+    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-32.png" 32 32
     foreach ($dir in @("$BUILD_DIR\packages\desktop\src-tauri\icons", "$BUILD_DIR\packages\web\public")) {
         if (Test-Path $dir) {
-            Copy-Item $ICON_ASSET "$dir\favicon.png" -Force -ErrorAction SilentlyContinue
-            Copy-Item $ICON_ASSET "$dir\icon.png" -Force -ErrorAction SilentlyContinue
+            Copy-Item "$BUILD_DIR\branding\icon-32.png" "$dir\favicon.png" -Force -ErrorAction SilentlyContinue
+            Copy-Item "$BUILD_DIR\branding\icon-512.png" "$dir\icon.png" -Force -ErrorAction SilentlyContinue
         }
     }
-    Write-Ok "Custom icon applied"
+    Write-Ok "Custom icon applied (auto-resized to 512, 256, 32)"
 }
 if (Test-Path $LOGO_ASSET) {
     Copy-Item $LOGO_ASSET "$BUILD_DIR\packages\web\public\logo.png" -Force -ErrorAction SilentlyContinue
     Write-Ok "Custom logo applied"
-    }
 }
 
 # Update HTML title
