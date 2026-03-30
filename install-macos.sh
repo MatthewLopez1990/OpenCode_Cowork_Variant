@@ -108,9 +108,24 @@ else
 fi
 cd "$BUILD_DIR"
 
-# Copy electron config
+# Copy electron config from Cowork repo into the cloned OpenChamber
+mkdir -p "$BUILD_DIR/electron"
 [ -f "$COWORK_REPO_DIR/electron/main.cjs" ] && cp "$COWORK_REPO_DIR/electron/main.cjs" "$BUILD_DIR/electron/main.cjs"
 [ -f "$COWORK_REPO_DIR/electron-builder.json" ] && cp "$COWORK_REPO_DIR/electron-builder.json" "$BUILD_DIR/electron-builder.json"
+
+# Set app name in package.json
+if [ -f "$BUILD_DIR/package.json" ]; then
+    python3 -c "
+import json
+with open('$BUILD_DIR/package.json') as f:
+    pkg = json.load(f)
+pkg['name'] = '$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed "s/[^a-z0-9]/-/g")'
+pkg['productName'] = '$APP_NAME'
+pkg['main'] = 'electron/main.cjs'
+with open('$BUILD_DIR/package.json', 'w') as f:
+    json.dump(pkg, f, indent=2)
+" 2>/dev/null
+fi
 
 # Save branding
 echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
@@ -173,14 +188,14 @@ echo -ne "  Installing AI provider SDK..."
 (cd "$OPENCODE_CONFIG_DIR" && bun install 2>/dev/null) || (cd "$OPENCODE_CONFIG_DIR" && npm install --silent 2>/dev/null) || true
 echo -e " ${GREEN}✓${NC}"
 
-# Commands (legal + finance)
+# Commands (legal + finance) — Anthropic plugins use SKILL.md in subdirectories
 for CMD_TYPE in legal finance; do
     CMDS_SRC="$COWORK_REPO_DIR/commands/$CMD_TYPE"
     if [ -d "$CMDS_SRC" ]; then
         CMDS_DEST="$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE"
-        mkdir -p "$CMDS_DEST"
-        cp "$CMDS_SRC/"*.md "$CMDS_DEST/" 2>/dev/null
-        echo -e "${GREEN}✓${NC} $(ls "$CMDS_DEST/"*.md 2>/dev/null | wc -l | tr -d ' ') $CMD_TYPE commands installed"
+        cp -r "$CMDS_SRC" "$OPENCODE_CONFIG_DIR/commands/" 2>/dev/null
+        SKILL_COUNT=$(find "$CMDS_DEST" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+        echo -e "${GREEN}✓${NC} $SKILL_COUNT $CMD_TYPE skills installed"
     fi
 done
 

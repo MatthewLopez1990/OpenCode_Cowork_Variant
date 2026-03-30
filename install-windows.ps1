@@ -117,7 +117,8 @@ if (Test-Path $BUILD_DIR) {
 Set-Location $BUILD_DIR
 
 # Copy electron config from Cowork repo
-if (Test-Path "$COWORK_REPO_DIR\electron") {
+New-Item -ItemType Directory -Force -Path "$BUILD_DIR\electron" | Out-Null
+if (Test-Path "$COWORK_REPO_DIR\electron\main.cjs") {
     Copy-Item "$COWORK_REPO_DIR\electron\main.cjs" "$BUILD_DIR\electron\main.cjs" -Force
 }
 if (Test-Path "$COWORK_REPO_DIR\electron-builder.json") {
@@ -302,14 +303,14 @@ if (Test-Path "$OPENCODE_CONFIG_DIR\node_modules\@ai-sdk") {
     Write-Warn "SDK install may have failed — will retry on first launch"
 }
 
-# Deploy commands (legal + finance)
+# Deploy commands (legal + finance) — Anthropic plugins use SKILL.md in subdirectories
 foreach ($cmdType in @("legal", "finance")) {
     $CMDS_SRC = "$COWORK_REPO_DIR\commands\$cmdType"
     if (Test-Path $CMDS_SRC) {
         $CMDS_DEST = "$OPENCODE_CONFIG_DIR\commands\$cmdType"
-        New-Item -ItemType Directory -Force -Path $CMDS_DEST | Out-Null
-        Copy-Item "$CMDS_SRC\*.md" $CMDS_DEST -Force
-        Write-Ok "$((Get-ChildItem "$CMDS_DEST\*.md").Count) $cmdType commands installed"
+        Copy-Item -Recurse -Force $CMDS_SRC "$OPENCODE_CONFIG_DIR\commands\" -ErrorAction SilentlyContinue
+        $skillCount = (Get-ChildItem -Recurse "$CMDS_DEST" -Filter "SKILL.md" -ErrorAction SilentlyContinue).Count
+        Write-Ok "$skillCount $cmdType skills installed"
     }
 }
 
