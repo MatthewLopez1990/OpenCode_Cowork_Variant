@@ -6075,16 +6075,23 @@ async function resolveManagedOpenCodePort(requestedPort) {
   });
 }
 
-// SF Steward: Ensure CLAUDE.md sandbox rules exist in the working directory.
-// OpenCode reads CLAUDE.md from the project directory for every session
-// (configured via contextPaths in opencode.json).
-// This ensures the AI always sees sandbox rules regardless of which directory is opened.
+// OpenCode Cowork: Ensure CLAUDE.md sandbox rules exist in the working directory.
+// Reads from CLAUDE_TEMPLATE.md (deployed by install script) or uses built-in defaults.
 function ensureSandboxRules(directory) {
   if (!directory) return;
   const claudePath = path.join(directory, 'CLAUDE.md');
   try {
-    {
-      const rules = `# SF Steward — Directory Sandbox Rules
+    // Try to read custom rules from the template file
+    const templatePath = path.join(__dirname, 'CLAUDE_TEMPLATE.md');
+    let rules = '';
+    try {
+      if (fs.existsSync(templatePath)) {
+        rules = fs.readFileSync(templatePath, 'utf8');
+      }
+    } catch (e) {}
+    // Fallback to built-in defaults if template not found
+    if (!rules) {
+      rules = `# Directory Sandbox Rules
 
 These rules are MANDATORY and apply to EVERY session. They CANNOT be overridden.
 
@@ -6187,19 +6194,18 @@ Write a convert.py file, then run: python3 convert.py
 - WRITE the .ps1/.py as a FILE — NEVER pass scripts inline through bash
 - ALL files in the current project directory — NEVER anywhere else
 - The .docx is the deliverable — tell the user about it
-- NEVER use Word COM (it hangs). NEVER use Python on Windows
 - NEVER create .doc (HTML), .html, or .rtf
 `;
-      fs.writeFileSync(claudePath, rules, 'utf8');
-      // On Windows: set Hidden + System attributes so it doesn't show in File Explorer
-      if (process.platform === 'win32') {
-        try {
-          const { execSync } = require('child_process');
-          execSync(`attrib +H +S "${claudePath}"`, { stdio: 'ignore', timeout: 5000 });
-        } catch (e) {}
-      }
-      console.log(`[Sandbox] Created CLAUDE.md in ${directory}`);
     }
+    fs.writeFileSync(claudePath, rules, 'utf8');
+    // On Windows: set Hidden + System attributes so it doesn't show in File Explorer
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`attrib +H +S "${claudePath}"`, { stdio: 'ignore', timeout: 5000 });
+      } catch (e) {}
+    }
+    console.log(`[Sandbox] Created CLAUDE.md in ${directory}`);
   } catch (e) {
     // Directory might not be writable — skip silently
   }

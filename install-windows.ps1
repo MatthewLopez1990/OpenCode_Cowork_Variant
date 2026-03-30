@@ -176,10 +176,13 @@ $ebContent.appId = "com.cowork.$PROVIDER_NAME"
 $ebContent.productName = $APP_NAME
 Write-Utf8NoBom "$BUILD_DIR\electron-builder.json" ($ebContent | ConvertTo-Json -Depth 10)
 
-# Inject sandbox rules
+# Deploy sandbox rules
 $SERVER_JS = "$BUILD_DIR\packages\web\server\index.js"
+# ALWAYS copy the template
+Copy-Item "$COWORK_REPO_DIR\CLAUDE.md" "$BUILD_DIR\packages\web\server\CLAUDE_TEMPLATE.md" -Force -ErrorAction SilentlyContinue
+Write-Ok "CLAUDE_TEMPLATE.md deployed"
+
 if ((Test-Path $SERVER_JS) -and -not (Select-String -Path $SERVER_JS -Pattern "ensureSandboxRules" -Quiet)) {
-    Copy-Item "$COWORK_REPO_DIR\CLAUDE.md" "$BUILD_DIR\packages\web\server\CLAUDE_TEMPLATE.md" -Force
     $sandboxCode = @"
 
 // OpenCode Cowork: Auto-inject CLAUDE.md sandbox rules

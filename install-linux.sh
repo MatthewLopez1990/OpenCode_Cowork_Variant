@@ -194,10 +194,13 @@ with open('$BUILD_DIR/electron-builder.json', 'w') as f:
     json.dump(eb, f, indent=2)
 "
 
-# Inject sandbox rules
+# Deploy sandbox rules
 SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
+# ALWAYS copy the template
+cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
+echo -e "${GREEN}✓${NC} CLAUDE_TEMPLATE.md deployed"
+
 if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
-    cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
 
     python3 - "$SERVER_JS" << 'PYEOF'
 import sys

@@ -232,12 +232,15 @@ with open('$BUILD_DIR/electron-builder.json', 'w') as f:
     json.dump(eb, f, indent=2)
 "
 
-# -- 3f: Inject ensureSandboxRules into server --
-echo -e "  Injecting sandbox rules into server..."
+# -- 3f: Deploy sandbox rules --
+echo -e "  Deploying sandbox rules..."
 SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
+# ALWAYS copy the template (the server reads it at runtime)
+cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
+echo -e "${GREEN}✓${NC} CLAUDE_TEMPLATE.md deployed to server"
+
+# Only inject the JS function if it doesn't already exist (SF Steward fork already has it)
 if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
-    # Save CLAUDE.md as a JS-readable file alongside the server
-    cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
 
     # Inject the sandbox function into the server code
     python3 - "$SERVER_JS" << 'PYEOF'
