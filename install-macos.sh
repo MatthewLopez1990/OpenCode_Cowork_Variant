@@ -218,29 +218,34 @@ with open('$BUILD_DIR/electron-builder.json', 'w') as f:
 echo -e "  Injecting sandbox rules into server..."
 SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
 if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
-    # Read the CLAUDE.md template
-    CLAUDE_CONTENT=""
-    if [ -f "$COWORK_REPO_DIR/CLAUDE.md" ]; then
-        CLAUDE_CONTENT=$(cat "$COWORK_REPO_DIR/CLAUDE.md" | sed 's/\\/\\\\/g' | sed 's/`/\\`/g' | sed 's/\$/\\$/g')
-    fi
+    # Save CLAUDE.md as a JS-readable file alongside the server
+    cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
 
-    # Inject the function before the first "async function" in the file
-    python3 << 'PYEOF'
-import re
+    # Inject the sandbox function into the server code using Python with proper variable passing
+    python3 - "$SERVER_JS" << 'PYEOF'
+import sys
 
-with open("$SERVER_JS", "r") as f:
+server_path = sys.argv[1]
+with open(server_path, "r") as f:
     content = f.read()
 
-claude_content = open("$COWORK_REPO_DIR/CLAUDE.md").read().replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
-
-sandbox_code = '''
+sandbox_code = """
 // OpenCode Cowork: Auto-inject CLAUDE.md sandbox rules into every project directory
+const __cowork_path = require('path');
+const __cowork_fs = require('fs');
+
 function ensureSandboxRules(directory) {
   if (!directory) return;
-  const claudePath = require('path').join(directory, 'CLAUDE.md');
+  const claudePath = __cowork_path.join(directory, 'CLAUDE.md');
   try {
-    const rules = `''' + claude_content + '''`;
-    require('fs').writeFileSync(claudePath, rules, 'utf8');
+    // Read the template from alongside this server file
+    const templatePath = __cowork_path.join(__dirname, 'CLAUDE_TEMPLATE.md');
+    let rules = '';
+    if (__cowork_fs.existsSync(templatePath)) {
+      rules = __cowork_fs.readFileSync(templatePath, 'utf8');
+    }
+    if (!rules) return;
+    __cowork_fs.writeFileSync(claudePath, rules, 'utf8');
     if (process.platform === 'win32') {
       try {
         require('child_process').execSync('attrib +H +S "' + claudePath + '"', { stdio: 'ignore', timeout: 5000 });
@@ -249,26 +254,18 @@ function ensureSandboxRules(directory) {
     console.log('[Sandbox] Created CLAUDE.md in ' + directory);
   } catch (e) {}
 }
-'''
 
-# Find a good injection point - before the first export or module.exports
-# Or at the end of the file before the last export
-if 'export default' in content or 'module.exports' in content:
-    # Inject before the last export
-    last_export = content.rfind('export ')
-    if last_export == -1:
-        last_export = content.rfind('module.exports')
-    if last_export > 0:
-        content = content[:last_export] + sandbox_code + '\n' + content[last_export:]
-else:
-    # Just append
-    content += '\n' + sandbox_code
+"""
 
-with open("$SERVER_JS", "w") as f:
+# Append at the end of the file
+content += sandbox_code
+
+with open(server_path, "w") as f:
     f.write(content)
 
 print("Sandbox rules injected into server")
 PYEOF
+    echo -e "${GREEN}✓${NC} Sandbox injection ready"
 fi
 
 # ── 3g: Save branding config ─────────────────────────────────
