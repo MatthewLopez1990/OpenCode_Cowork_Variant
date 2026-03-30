@@ -104,14 +104,11 @@ if ! command -v bun &>/dev/null; then
 fi
 echo -e "${GREEN}*${NC} Bun $(bun --version)"
 
-# OpenCode CLI
-# Always install/update OpenCode CLI
+# Always install/update OpenCode CLI to ensure latest version
+rm -f "$HOME/.local/bin/opencode" 2>/dev/null
 echo -e "  Installing OpenCode CLI (latest)..."
-if true; then
-    echo -e "${YELLOW}Installing OpenCode CLI...${NC}"
-    curl -fsSL https://opencode.ai/install | bash
-    export PATH="$HOME/.opencode/bin:$PATH"
-fi
+curl -fsSL https://opencode.ai/install | bash 2>/dev/null
+export PATH="$HOME/.opencode/bin:$PATH"
 echo -e "${GREEN}*${NC} OpenCode CLI $(opencode --version 2>/dev/null || echo installed)"
 echo ""
 

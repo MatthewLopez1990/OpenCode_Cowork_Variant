@@ -98,9 +98,19 @@ fi
 echo -e "${GREEN}*${NC} Bun $(bun --version)"
 
 # Always install/update OpenCode CLI to ensure latest version
+# Remove any old wrapper scripts that might override the real binary
+rm -f "$HOME/.local/bin/opencode" 2>/dev/null
+rm -f /usr/local/bin/opencode 2>/dev/null
 echo -e "  Installing OpenCode CLI (latest)..."
 curl -fsSL https://opencode.ai/install | bash 2>/dev/null
 export PATH="$HOME/.opencode/bin:$PATH"
+# Verify it's the REAL binary (not a wrapper)
+OC_SIZE=$(wc -c < "$HOME/.opencode/bin/opencode" 2>/dev/null || echo "0")
+if [ "$OC_SIZE" -lt 1000000 ]; then
+    echo -e "${YELLOW}!${NC} OpenCode binary looks like a wrapper ($OC_SIZE bytes). Reinstalling..."
+    rm -f "$HOME/.opencode/bin/opencode"
+    curl -fsSL https://opencode.ai/install | bash 2>/dev/null
+fi
 echo -e "${GREEN}*${NC} OpenCode CLI $(opencode --version 2>/dev/null || echo 'installed')"
 echo ""
 

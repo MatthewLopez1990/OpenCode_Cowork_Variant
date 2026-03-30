@@ -92,6 +92,11 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
 Write-Ok "Bun $(bun --version 2>&1)"
 
 # Always install/update OpenCode CLI to latest version
+# Remove any old wrapper scripts that might override the real binary
+Remove-Item "$env:USERPROFILE\.local\bin\opencode.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:USERPROFILE\.local\bin\opencode" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:USERPROFILE\.opencode\bin\opencode.cmd" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:USERPROFILE\.opencode\bin\opencode.real.exe" -Force -ErrorAction SilentlyContinue
 Write-Host "  Installing OpenCode CLI (latest)..."
 if ($true) {
     $ocArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") { "arm64" } else { "x64" }
