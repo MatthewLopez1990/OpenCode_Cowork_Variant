@@ -281,3 +281,21 @@ echo -e "  ${GREEN}✓${NC} AI models (default: $DEFAULT_MODEL)"
 echo -e "  ${GREEN}✓${NC} oh-my-opencode + Legal + Finance"
 echo -e "  ${GREEN}✓${NC} Directory sandbox"
 echo ""
+echo -e "  Default project: $DEFAULT_PROJECT"
+echo ""
+echo -ne "Launch now? (y/n): "
+read -r LAUNCH
+if [[ "$LAUNCH" =~ ^[Yy] ]]; then
+    APP_CMD=$(echo "$APP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+    if [ -f "$HOME/.local/bin/$APP_CMD" ]; then
+        nohup "$HOME/.local/bin/$APP_CMD" > /dev/null 2>&1 &
+        echo -e "  ${GREEN}$APP_NAME is running.${NC}"
+    else
+        echo -e "  Starting in browser mode..."
+        cd "$BUILD_DIR"
+        nohup bun run packages/web/server/index.js > /dev/null 2>&1 &
+        sleep 3
+        xdg-open "http://localhost:3000" 2>/dev/null || echo -e "  Open http://localhost:3000 in your browser"
+        echo -e "  ${GREEN}$APP_NAME is running. Keep this terminal open.${NC}"
+    fi
+fi
