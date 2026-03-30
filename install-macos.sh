@@ -154,17 +154,25 @@ echo -e "Building frontend..."
 bun run build:web 2>&1 | tail -3
 echo -e "${GREEN}✓${NC} Frontend built"
 
+# Ensure branding files exist (electron-builder fails if extraResources are missing)
+mkdir -p "$BUILD_DIR/branding"
+[ ! -f "$BUILD_DIR/branding/icon.png" ] && echo "" > "$BUILD_DIR/branding/icon.png"
+[ ! -f "$BUILD_DIR/branding/icon.ico" ] && echo "" > "$BUILD_DIR/branding/icon.ico"
+
 # Build native app
 echo -e "Packaging desktop app (this may take a few minutes)..."
-bunx electron-builder --config electron-builder.json --mac 2>&1 | grep -E "(Bundling|building|signing|Finished|target=)" || true
+ELECTRON_BUILD_LOG=$(bunx electron-builder --config electron-builder.json --mac 2>&1)
+echo "$ELECTRON_BUILD_LOG" | grep -E "(Bundling|building|signing|Finished|target=|error|Error)" || true
 
-BUILT_APP=$(find "$BUILD_DIR/electron-dist" -name "*.app" -maxdepth 3 | head -1)
+BUILT_APP=$(find "$BUILD_DIR/electron-dist" -name "*.app" -maxdepth 3 2>/dev/null | head -1)
+DESKTOP_APP_INSTALLED=false
 if [ -n "$BUILT_APP" ] && [ -d "$BUILT_APP" ]; then
     [ -d "/Applications/$APP_NAME.app" ] && rm -rf "/Applications/$APP_NAME.app"
     cp -R "$BUILT_APP" "/Applications/$APP_NAME.app"
     echo -e "${GREEN}✓${NC} $APP_NAME.app installed to /Applications"
+    DESKTOP_APP_INSTALLED=true
 else
-    echo -e "${YELLOW}!${NC} Desktop build failed. You can still use: opencode web"
+    echo -e "${YELLOW}!${NC} Desktop app build skipped — will use browser mode"
 fi
 echo ""
 
@@ -251,5 +259,22 @@ echo ""
 echo -ne "Launch now? (y/n): "
 read -r LAUNCH
 if [[ "$LAUNCH" =~ ^[Yy] ]]; then
-    open "/Applications/$APP_NAME.app" 2>/dev/null || echo -e "  Run: opencode web"
+    if [ "$DESKTOP_APP_INSTALLED" = true ]; then
+        open "/Applications/$APP_NAME.app"
+        echo -e "  ${GREEN}$APP_NAME is running.${NC}"
+    else
+        echo -e "  Starting $APP_NAME in browser mode..."
+        cd "$BUILD_DIR"
+        nohup bun run packages/web/server/index.js > /dev/null 2>&1 &
+        sleep 3
+        # Find the port from the server output
+        PORT=$(lsof -ti :3000 2>/dev/null | head -1)
+        if [ -n "$PORT" ]; then
+            open "http://localhost:3000"
+        else
+            # Try to find any port the server started on
+            open "http://localhost:3000" 2>/dev/null || open "http://localhost:8080" 2>/dev/null
+        fi
+        echo -e "  ${GREEN}$APP_NAME is running in your browser. Keep this terminal open.${NC}"
+    fi
 fi
