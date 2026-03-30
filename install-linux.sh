@@ -180,7 +180,7 @@ INDEX_HTML="$BUILD_DIR/packages/web/index.html"
 # Add Electron dependencies (upstream OpenChamber doesn't include them)
 echo -e "Adding Electron dependencies..."
 cd "$BUILD_DIR"
-bun add electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
+bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
 
 bun install 2>&1 | tail -1
 echo -e "Building frontend..."
