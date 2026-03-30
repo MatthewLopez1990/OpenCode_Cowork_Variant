@@ -1,8 +1,9 @@
 # ============================================================
 #  OpenCode Cowork — Windows ARM64 Installer (Copilot+ PCs)
+#  White-label AI assistant for any enterprise
 #
 #  Delegates to install-windows.ps1 which handles both x64 and
-#  ARM64 architectures automatically.
+#  ARM64. The Electron app runs natively on ARM64.
 # ============================================================
 
 Write-Host ""

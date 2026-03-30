@@ -5,9 +5,9 @@ set -e
 #  OpenCode Cowork — macOS Installer
 #  White-label AI assistant for any enterprise
 #
-#  Clones OpenChamber, patches branding into the source,
-#  builds Electron desktop app, configures AI models,
-#  deploys sandbox rules.
+#  This is a self-contained fork. The installer clones THIS repo,
+#  builds the branded Electron desktop app, configures AI models,
+#  and deploys sandbox rules.
 # ============================================================
 
 BLUE='\033[0;34m'
@@ -17,18 +17,18 @@ RED='\033[0;31m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-OPENCHAMBER_REPO="https://github.com/openchamber/openchamber.git"
+COWORK_REPO="https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 COWORK_REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$HOME/.opencode-cowork-build"
 
 echo ""
-echo -e "${BLUE}${BOLD}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}${BOLD}║  OpenCode Cowork — Enterprise Installer   ║${NC}"
-echo -e "${BLUE}${BOLD}║  White-label AI for your organization      ║${NC}"
-echo -e "${BLUE}${BOLD}╚══════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}${BOLD}+==========================================+${NC}"
+echo -e "${BLUE}${BOLD}|  OpenCode Cowork - Enterprise Installer   |${NC}"
+echo -e "${BLUE}${BOLD}|  White-label AI for your organization      |${NC}"
+echo -e "${BLUE}${BOLD}+==========================================+${NC}"
 echo ""
 
-# ── Step 1: Organization Setup ───────────────────────────────
+# -- Step 1: Organization Setup --
 echo -e "${BOLD}Step 1: Organization Setup${NC}"
 echo ""
 
@@ -49,7 +49,7 @@ PROVIDER_NAME=$(echo "$PROVIDER_DISPLAY" | tr '[:upper:]' '[:lower:]' | sed 's/[
 
 API_URL=""
 while [ -z "$API_URL" ]; do
-    echo -ne "${YELLOW}API base URL (e.g., 'https://api.yourcompany.com/v1'): ${NC}"
+    echo -ne "${YELLOW}API base URL (e.g., 'https://api.yourcompany.com/api'): ${NC}"
     read -r API_URL
     [ -z "$API_URL" ] && echo -e "${RED}Required.${NC}"
 done
@@ -69,17 +69,25 @@ read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
 echo ""
-echo -e "${GREEN}✓${NC} Organization: $APP_NAME"
-echo -e "${GREEN}✓${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
-echo -e "${GREEN}✓${NC} Model: $DEFAULT_MODEL"
+echo -e "${GREEN}*${NC} Organization: $APP_NAME"
+echo -e "${GREEN}*${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
+echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
-ICON_ASSET="$COWORK_REPO_DIR/assets/icon.png"
-LOGO_ASSET="$COWORK_REPO_DIR/assets/logo.png"
-[ -f "$ICON_ASSET" ] && echo -e "${GREEN}✓${NC} Icon: assets/icon.png" || echo -e "  - No custom icon — using defaults"
-[ -f "$LOGO_ASSET" ] && echo -e "${GREEN}✓${NC} Logo: assets/logo.png" || echo -e "  - No custom logo — using defaults"
+# Check for branding assets (case-insensitive)
+ICON_ASSET=""
+LOGO_ASSET=""
+for f in "$COWORK_REPO_DIR/assets/"[Ii][Cc][Oo][Nn].[Pp][Nn][Gg]; do
+    [ -f "$f" ] && ICON_ASSET="$f" && break
+done
+for f in "$COWORK_REPO_DIR/assets/"[Ll][Oo][Gg][Oo].[Pp][Nn][Gg]; do
+    [ -f "$f" ] && LOGO_ASSET="$f" && break
+done
+
+[ -n "$ICON_ASSET" ] && echo -e "${GREEN}*${NC} Icon: $(basename "$ICON_ASSET")" || echo -e "  - No custom icon -- using defaults"
+[ -n "$LOGO_ASSET" ] && echo -e "${GREEN}*${NC} Logo: $(basename "$LOGO_ASSET")" || echo -e "  - No custom logo -- using defaults"
 echo ""
 
-# ── Step 2: Prerequisites ────────────────────────────────────
+# -- Step 2: Prerequisites --
 echo -e "${BOLD}Step 2: Installing prerequisites...${NC}"
 
 if ! command -v bun &>/dev/null; then
@@ -87,32 +95,32 @@ if ! command -v bun &>/dev/null; then
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
 fi
-echo -e "${GREEN}✓${NC} Bun $(bun --version)"
+echo -e "${GREEN}*${NC} Bun $(bun --version)"
 
 if ! command -v opencode &>/dev/null; then
     curl -fsSL https://opencode.ai/install | bash
     export PATH="$HOME/.opencode/bin:$PATH"
 fi
-echo -e "${GREEN}✓${NC} OpenCode CLI"
+echo -e "${GREEN}*${NC} OpenCode CLI"
 echo ""
 
-# ── Step 3: Clone, Patch, and Build ──────────────────────────
+# -- Step 3: Clone, Brand, and Build --
 echo -e "${BOLD}Step 3: Building $APP_NAME...${NC}"
 
 if [ -d "$BUILD_DIR" ]; then
     cd "$BUILD_DIR" && git pull 2>/dev/null || true
 else
-    git clone --depth 1 "$OPENCHAMBER_REPO" "$BUILD_DIR"
+    git clone --depth 1 "$COWORK_REPO" "$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
 
-# ── 3a: Copy Electron config ─────────────────────────────────
+# -- 3a: Copy Electron config from this fork --
 echo -e "  Applying Electron configuration..."
 mkdir -p "$BUILD_DIR/electron"
 cp "$COWORK_REPO_DIR/electron/main.cjs" "$BUILD_DIR/electron/main.cjs"
 cp "$COWORK_REPO_DIR/electron-builder.json" "$BUILD_DIR/electron-builder.json"
 
-# ── 3b: Patch package.json ───────────────────────────────────
+# -- 3b: Patch package.json --
 echo -e "  Setting app name in package.json..."
 python3 -c "
 import json
@@ -125,12 +133,12 @@ with open('$BUILD_DIR/package.json', 'w') as f:
     json.dump(pkg, f, indent=2)
 "
 
-# ── 3c: Apply branding assets ────────────────────────────────
+# -- 3c: Apply branding assets --
 echo -e "  Applying branding..."
 mkdir -p "$BUILD_DIR/branding"
 mkdir -p "$BUILD_DIR/packages/desktop/src-tauri/icons"
 
-if [ -f "$ICON_ASSET" ]; then
+if [ -n "$ICON_ASSET" ]; then
     # Auto-resize to all required sizes
     sips -z 512 512 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
     sips -z 256 256 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-256.png" 2>/dev/null
@@ -164,15 +172,15 @@ if [ -f "$ICON_ASSET" ]; then
     cp "$BUILD_DIR/branding/icon-180.png" "$BUILD_DIR/packages/web/public/apple-touch-icon.png" 2>/dev/null
     # For electron-builder extraResources
     cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" 2>/dev/null
-    echo -e "${GREEN}✓${NC} Custom icon applied (resized + .icns created)"
+    echo -e "${GREEN}*${NC} Custom icon applied (resized + .icns created)"
 fi
 
-if [ -f "$LOGO_ASSET" ]; then
+if [ -n "$LOGO_ASSET" ]; then
     cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/cowork-logo.png" 2>/dev/null
-    echo -e "${GREEN}✓${NC} Custom logo applied"
+    echo -e "${GREEN}*${NC} Custom logo applied"
 fi
 
-# ── 3d: Patch index.html with branding ───────────────────────
+# -- 3d: Patch index.html with branding --
 echo -e "  Patching HTML with branding..."
 INDEX_HTML="$BUILD_DIR/packages/web/index.html"
 if [ -f "$INDEX_HTML" ]; then
@@ -180,20 +188,20 @@ if [ -f "$INDEX_HTML" ]; then
     sed -i '' "s|<title>[^<]*</title>|<title>$APP_NAME</title>|g" "$INDEX_HTML" 2>/dev/null
 
     # Replace the loading screen logo
-    if [ -f "$LOGO_ASSET" ]; then
-        # Find and replace the logo img src in the loading screen
+    if [ -n "$LOGO_ASSET" ]; then
+        sed -i '' 's|src="/cowork-logo.png"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
         sed -i '' 's|src="/logo-dark-512x512.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
         sed -i '' 's|src="/logo-light-512x512.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
-        # Also try OpenChamber's default logo references
         sed -i '' 's|src="[^"]*logo[^"]*\.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
     fi
 
     # Update meta tags
+    sed -i '' "s|content=\"OpenCode Cowork\"|content=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
     sed -i '' "s|content=\"OpenChamber[^\"]*\"|content=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
-    sed -i '' "s|alt=\"OpenChamber\"|alt=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
+    sed -i '' "s|alt=\"Loading\"|alt=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
 fi
 
-# ── 3e: Update electron-builder.json with correct paths ──────
+# -- 3e: Update electron-builder.json with correct paths --
 echo -e "  Updating build configuration..."
 python3 -c "
 import json
@@ -214,14 +222,14 @@ with open('$BUILD_DIR/electron-builder.json', 'w') as f:
     json.dump(eb, f, indent=2)
 "
 
-# ── 3f: Inject ensureSandboxRules into server ─────────────────
+# -- 3f: Inject ensureSandboxRules into server --
 echo -e "  Injecting sandbox rules into server..."
 SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
 if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
     # Save CLAUDE.md as a JS-readable file alongside the server
     cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
 
-    # Inject the sandbox function into the server code using Python with proper variable passing
+    # Inject the sandbox function into the server code
     python3 - "$SERVER_JS" << 'PYEOF'
 import sys
 
@@ -265,13 +273,13 @@ with open(server_path, "w") as f:
 
 print("Sandbox rules injected into server")
 PYEOF
-    echo -e "${GREEN}✓${NC} Sandbox injection ready"
+    echo -e "${GREEN}*${NC} Sandbox injection ready"
 fi
 
-# ── 3g: Save branding config ─────────────────────────────────
+# -- 3g: Save branding config --
 echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
 
-# ── 3h: Install dependencies and build ────────────────────────
+# -- 3h: Install dependencies and build --
 echo -e "  Adding Electron dependencies..."
 cd "$BUILD_DIR"
 bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
@@ -281,9 +289,9 @@ bun install 2>&1 | tail -1
 
 echo -e "  Building frontend..."
 bun run build:web 2>&1 | tail -3
-echo -e "${GREEN}✓${NC} Frontend built"
+echo -e "${GREEN}*${NC} Frontend built"
 
-# ── 3i: Build Electron app ───────────────────────────────────
+# -- 3i: Build Electron app --
 echo -e "  Packaging desktop app (this may take a few minutes)..."
 # Ensure branding placeholders exist for extraResources
 [ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && [ -f "$BUILD_DIR/branding/icon.png" ] && cp "$BUILD_DIR/branding/icon.png" "$BUILD_DIR/packages/web/public/cowork-icon.png"
@@ -298,14 +306,14 @@ DESKTOP_APP_INSTALLED=false
 if [ -n "$BUILT_APP" ] && [ -d "$BUILT_APP" ]; then
     [ -d "/Applications/$APP_NAME.app" ] && rm -rf "/Applications/$APP_NAME.app"
     cp -R "$BUILT_APP" "/Applications/$APP_NAME.app"
-    echo -e "${GREEN}✓${NC} $APP_NAME.app installed to /Applications"
+    echo -e "${GREEN}*${NC} $APP_NAME.app installed to /Applications"
     DESKTOP_APP_INSTALLED=true
 else
-    echo -e "${YELLOW}!${NC} Desktop app build skipped — will use browser mode"
+    echo -e "${YELLOW}!${NC} Desktop app build skipped -- will use browser mode"
 fi
 echo ""
 
-# ── Step 4: Configure AI ─────────────────────────────────────
+# -- Step 4: Configure AI --
 echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
@@ -315,7 +323,31 @@ TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
     sed "s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__PROVIDER_NAME__|$PROVIDER_NAME|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
 fi
-echo -e "${GREEN}✓${NC} AI models configured (default: $DEFAULT_MODEL)"
+
+# Check for additional models in config/models.json
+MODELS_FILE="$COWORK_REPO_DIR/config/models.json"
+if [ -f "$MODELS_FILE" ]; then
+    python3 -c "
+import json, sys
+try:
+    with open('$OPENCODE_CONFIG_DIR/opencode.json') as f:
+        config = json.load(f)
+    with open('$MODELS_FILE') as f:
+        extra = json.load(f)
+    provider_key = '$PROVIDER_NAME'
+    if provider_key in config.get('provider', {}):
+        models = extra.get('models', {})
+        for model_id, model_cfg in models.items():
+            config['provider'][provider_key]['models'][model_id] = model_cfg
+        with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f'Added {len(models)} extra models from models.json')
+except Exception as e:
+    print(f'Note: Could not add extra models: {e}', file=sys.stderr)
+"
+fi
+
+echo -e "${GREEN}*${NC} AI models configured (default: $DEFAULT_MODEL)"
 
 # npm provider SDK
 cat > "$OPENCODE_CONFIG_DIR/package.json" << 'PKGJSON'
@@ -328,7 +360,11 @@ cat > "$OPENCODE_CONFIG_DIR/package.json" << 'PKGJSON'
 PKGJSON
 echo -ne "  Installing AI provider SDK..."
 (cd "$OPENCODE_CONFIG_DIR" && bun install 2>/dev/null) || true
-echo -e " ${GREEN}✓${NC}"
+if [ -d "$OPENCODE_CONFIG_DIR/node_modules/@ai-sdk" ]; then
+    echo -e " ${GREEN}*${NC}"
+else
+    echo -e " ${YELLOW}(will retry on first launch)${NC}"
+fi
 
 # Commands (legal + finance)
 mkdir -p "$OPENCODE_CONFIG_DIR/commands"
@@ -338,7 +374,7 @@ for CMD_TYPE in legal finance; do
         rm -rf "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE" 2>/dev/null
         cp -r "$CMDS_SRC" "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE"
         SKILL_COUNT=$(find "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
-        echo -e "${GREEN}✓${NC} $SKILL_COUNT $CMD_TYPE skills installed"
+        echo -e "${GREEN}*${NC} $SKILL_COUNT $CMD_TYPE skills installed"
     fi
 done
 
@@ -351,11 +387,12 @@ mkdir -p "$DEFAULT_PROJECT"
 CLAUDE_SRC="$COWORK_REPO_DIR/CLAUDE.md"
 if [ -f "$CLAUDE_SRC" ]; then
     cp "$CLAUDE_SRC" "$DEFAULT_PROJECT/CLAUDE.md"
-    echo -e "${GREEN}✓${NC} Sandbox rules deployed"
+    echo -e "${GREEN}*${NC} Sandbox rules deployed"
 fi
 mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
 cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
-echo -e "${GREEN}✓${NC} Default project: $DEFAULT_PROJECT"
+
+echo -e "${GREEN}*${NC} Default project: $DEFAULT_PROJECT"
 
 # Settings
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
@@ -372,15 +409,15 @@ if [ -f "$SHELL_PROFILE" ]; then
 fi
 
 echo ""
-echo -e "${BLUE}${BOLD}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}${BOLD}║         Installation Complete!            ║${NC}"
-echo -e "${BLUE}${BOLD}╚══════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}${BOLD}+==========================================+${NC}"
+echo -e "${BLUE}${BOLD}|         Installation Complete!            |${NC}"
+echo -e "${BLUE}${BOLD}+==========================================+${NC}"
 echo ""
-echo -e "  ${GREEN}✓${NC} $APP_NAME desktop app"
-echo -e "  ${GREEN}✓${NC} AI models (default: $DEFAULT_MODEL)"
-echo -e "  ${GREEN}✓${NC} oh-my-opencode plugin"
-echo -e "  ${GREEN}✓${NC} Legal + Finance commands"
-echo -e "  ${GREEN}✓${NC} Directory sandbox"
+echo -e "  ${GREEN}*${NC} $APP_NAME desktop app"
+echo -e "  ${GREEN}*${NC} AI models (default: $DEFAULT_MODEL)"
+echo -e "  ${GREEN}*${NC} oh-my-opencode plugin"
+echo -e "  ${GREEN}*${NC} Legal + Finance commands"
+echo -e "  ${GREEN}*${NC} Directory sandbox"
 echo ""
 echo -e "  Default project: $DEFAULT_PROJECT"
 echo ""

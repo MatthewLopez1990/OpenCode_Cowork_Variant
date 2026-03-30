@@ -2,33 +2,33 @@
 #  OpenCode Cowork — Windows Installer (x64 + ARM64)
 #  White-label AI assistant for any enterprise
 #
-#  Prompts for: App name, API URL, API key, logos
-#  Installs: Git, Bun, OpenCode CLI, branded desktop app
-#  Configures: AI models, oh-my-opencode plugin,
-#              legal + finance commands, directory sandbox
+#  This is a self-contained fork. The installer clones THIS repo,
+#  builds the branded Electron desktop app, configures AI models,
+#  and deploys sandbox rules.
 # ============================================================
 
 $ErrorActionPreference = "Stop"
-$OPENCHAMBER_REPO = "https://github.com/openchamber/openchamber.git"
+$COWORK_REPO = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
 
-function Write-Ok($m) { Write-Host "  ✓ $m" -ForegroundColor Green }
+function Write-Ok($m) { Write-Host "  * $m" -ForegroundColor Green }
 function Write-Warn($m) { Write-Host "  ! $m" -ForegroundColor Yellow }
 
+# Write UTF-8 WITHOUT BOM
 function Write-Utf8NoBom($Path, $Content) {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($Path, $Content, $utf8)
 }
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host "  ║    OpenCode Cowork — Enterprise Installer  ║" -ForegroundColor Blue
-Write-Host "  ║    White-label AI for your organization     ║" -ForegroundColor Blue
-Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Blue
+Write-Host "  +==========================================+" -ForegroundColor Blue
+Write-Host "  |  OpenCode Cowork - Enterprise Installer   |" -ForegroundColor Blue
+Write-Host "  |  White-label AI for your organization      |" -ForegroundColor Blue
+Write-Host "  +==========================================+" -ForegroundColor Blue
 Write-Host ""
 
-# ── Step 1: Branding ─────────────────────────────────────────
+# Step 1: Organization Setup
 Write-Host "Step 1: Organization Setup" -ForegroundColor White
 Write-Host ""
 
@@ -43,12 +43,11 @@ while ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) {
     $PROVIDER_DISPLAY = Read-Host "  Provider display name (e.g., 'Acme AI')"
     if ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) { Write-Host "  Required." -ForegroundColor Red }
 }
-# Create a safe provider ID from the display name
-$PROVIDER_NAME = ($PROVIDER_DISPLAY -replace '[^a-zA-Z0-9]', '-').ToLower().Trim('-')
+$PROVIDER_NAME = ($PROVIDER_DISPLAY.ToLower() -replace '[^a-z0-9]','-' -replace '-+','-').Trim('-')
 
 $API_URL = ""
 while ([string]::IsNullOrWhiteSpace($API_URL)) {
-    $API_URL = Read-Host "  API base URL (e.g., 'https://api.yourcompany.com/v1')"
+    $API_URL = Read-Host "  API base URL (e.g., 'https://api.yourcompany.com/api')"
     if ([string]::IsNullOrWhiteSpace($API_URL)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
@@ -67,14 +66,15 @@ Write-Host ""
 Write-Ok "Organization: $APP_NAME"
 Write-Ok "Provider: $PROVIDER_DISPLAY ($API_URL)"
 Write-Ok "Model: $DEFAULT_MODEL"
-# Check for local branding assets
-$ICON_ASSET = "$COWORK_REPO_DIR\assets\icon.png"
-$LOGO_ASSET = "$COWORK_REPO_DIR\assets\logo.png"
-if (Test-Path $ICON_ASSET) { Write-Ok "Icon: assets\icon.png" } else { Write-Host "  - No custom icon (assets\icon.png) — using defaults" -ForegroundColor Gray }
-if (Test-Path $LOGO_ASSET) { Write-Ok "Logo: assets\logo.png" } else { Write-Host "  - No custom logo (assets\logo.png) — using defaults" -ForegroundColor Gray }
+
+# Check for branding assets
+$ICON_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\icon.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+$LOGO_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\logo.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ICON_ASSET) { Write-Ok "Icon: $($ICON_ASSET.Name)" } else { Write-Host "  - No custom icon -- using defaults" }
+if ($LOGO_ASSET) { Write-Ok "Logo: $($LOGO_ASSET.Name)" } else { Write-Host "  - No custom logo -- using defaults" }
 Write-Host ""
 
-# ── Step 2: Prerequisites ──────────────────────────────────
+# Step 2: Prerequisites
 Write-Host "Step 2: Installing prerequisites..." -ForegroundColor White
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -106,166 +106,159 @@ if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
 Write-Ok "OpenCode CLI"
 Write-Host ""
 
-# ── Step 3: Clone and build ──────────────────────────────
+# Step 3: Clone and build
 Write-Host "Step 3: Building $APP_NAME..." -ForegroundColor White
 
 if (Test-Path $BUILD_DIR) {
     Set-Location $BUILD_DIR
     git pull 2>&1 | Out-Null
 } else {
-    git clone --depth 1 $OPENCHAMBER_REPO $BUILD_DIR 2>&1 | Out-Null
+    git clone --depth 1 $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
 }
+
 Set-Location $BUILD_DIR
 
-# Copy electron config from Cowork repo
-New-Item -ItemType Directory -Force -Path "$BUILD_DIR\electron" | Out-Null
-if (Test-Path "$COWORK_REPO_DIR\electron\main.cjs") {
-    Copy-Item "$COWORK_REPO_DIR\electron\main.cjs" "$BUILD_DIR\electron\main.cjs" -Force
-}
-if (Test-Path "$COWORK_REPO_DIR\electron-builder.json") {
-    Copy-Item "$COWORK_REPO_DIR\electron-builder.json" "$BUILD_DIR\electron-builder.json" -Force
-}
+# Copy Electron config
+Write-Host "  Applying Electron configuration..."
+if (-not (Test-Path "$BUILD_DIR\electron")) { New-Item -ItemType Directory -Force -Path "$BUILD_DIR\electron" | Out-Null }
+Copy-Item "$COWORK_REPO_DIR\electron\main.cjs" "$BUILD_DIR\electron\main.cjs" -Force
+Copy-Item "$COWORK_REPO_DIR\electron-builder.json" "$BUILD_DIR\electron-builder.json" -Force
 
-# Set app name in package.json
-$pkgPath = "$BUILD_DIR\package.json"
-if (Test-Path $pkgPath) {
-    $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
-    $pkg.name = ($APP_NAME -replace '[^a-zA-Z0-9]', '-').ToLower()
-    $pkg.productName = $APP_NAME
-    if (-not $pkg.main) { $pkg | Add-Member -NotePropertyName "main" -NotePropertyValue "electron/main.cjs" -Force }
-    $pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgPath -Encoding UTF8
-}
+# Patch package.json
+Write-Host "  Setting app name..."
+$pkgContent = Get-Content "$BUILD_DIR\package.json" -Raw | ConvertFrom-Json
+$pkgContent.name = ($APP_NAME.ToLower() -replace '[^a-z0-9]','-')
+$pkgContent | Add-Member -MemberType NoteProperty -Name "productName" -Value $APP_NAME -Force
+$pkgContent.main = "electron/main.cjs"
+$pkgContent | ConvertTo-Json -Depth 10 | Set-Content "$BUILD_DIR\package.json" -Encoding UTF8
 
-# Save branding config for the Electron app to read
-$brandingJson = @{ appName = $APP_NAME; provider = $PROVIDER_DISPLAY } | ConvertTo-Json
-Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" $brandingJson
-
-# Apply branding assets from the assets/ folder (auto-resize with .NET)
-New-Item -ItemType Directory -Force -Path "$BUILD_DIR\branding" | Out-Null
-
-# Helper: resize an image using .NET System.Drawing
-function Resize-Image($Source, $Dest, $Width, $Height) {
-    try {
-        Add-Type -AssemblyName System.Drawing
-        $src = [System.Drawing.Image]::FromFile($Source)
-        $bmp = New-Object System.Drawing.Bitmap($Width, $Height)
-        $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-        $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $gfx.DrawImage($src, 0, 0, $Width, $Height)
-        $bmp.Save($Dest, [System.Drawing.Imaging.ImageFormat]::Png)
-        $gfx.Dispose(); $bmp.Dispose(); $src.Dispose()
-    } catch {}
-}
-
-if (Test-Path $ICON_ASSET) {
-    Copy-Item $ICON_ASSET "$BUILD_DIR\branding\icon.png" -Force
-    # Auto-resize to standard sizes
-    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-512.png" 512 512
-    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-256.png" 256 256
-    Resize-Image $ICON_ASSET "$BUILD_DIR\branding\icon-32.png" 32 32
-    foreach ($dir in @("$BUILD_DIR\packages\desktop\src-tauri\icons", "$BUILD_DIR\packages\web\public")) {
-        if (Test-Path $dir) {
-            Copy-Item "$BUILD_DIR\branding\icon-32.png" "$dir\favicon.png" -Force -ErrorAction SilentlyContinue
-            Copy-Item "$BUILD_DIR\branding\icon-512.png" "$dir\icon.png" -Force -ErrorAction SilentlyContinue
-        }
+# Patch index.html
+$INDEX_HTML = "$BUILD_DIR\packages\web\index.html"
+if (Test-Path $INDEX_HTML) {
+    $htmlContent = Get-Content $INDEX_HTML -Raw
+    $htmlContent = $htmlContent -replace '<title>[^<]*</title>', "<title>$APP_NAME</title>"
+    $htmlContent = $htmlContent -replace 'content="OpenCode Cowork"', "content=`"$APP_NAME`""
+    $htmlContent = $htmlContent -replace 'content="OpenChamber[^"]*"', "content=`"$APP_NAME`""
+    $htmlContent = $htmlContent -replace 'alt="Loading"', "alt=`"$APP_NAME`""
+    if ($LOGO_ASSET) {
+        Copy-Item $LOGO_ASSET.FullName "$BUILD_DIR\packages\web\public\cowork-logo.png" -Force
+        $htmlContent = $htmlContent -replace 'src="[^"]*logo[^"]*\.svg"', 'src="/cowork-logo.png"'
+        Write-Ok "Custom logo applied"
     }
-    Write-Ok "Custom icon applied (auto-resized to 512, 256, 32)"
-}
-if (Test-Path $LOGO_ASSET) {
-    Copy-Item $LOGO_ASSET "$BUILD_DIR\packages\web\public\logo.png" -Force -ErrorAction SilentlyContinue
-    Write-Ok "Custom logo applied"
+    Write-Utf8NoBom $INDEX_HTML $htmlContent
 }
 
-# Update HTML title
-$indexHtml = "$BUILD_DIR\packages\web\index.html"
-if (Test-Path $indexHtml) {
-    $html = Get-Content $indexHtml -Raw
-    $html = $html -replace '<title>[^<]*</title>', "<title>$APP_NAME</title>"
-    Set-Content $indexHtml $html -Encoding UTF8
+# Apply icon
+if ($ICON_ASSET) {
+    $iconDir = "$BUILD_DIR\packages\desktop\src-tauri\icons"
+    New-Item -ItemType Directory -Force -Path $iconDir | Out-Null
+    Copy-Item $ICON_ASSET.FullName "$iconDir\icon.png" -Force
+    Copy-Item $ICON_ASSET.FullName "$BUILD_DIR\packages\web\public\cowork-icon.png" -Force
+    Copy-Item $ICON_ASSET.FullName "$BUILD_DIR\packages\web\public\favicon.png" -Force
+    New-Item -ItemType Directory -Force -Path "$BUILD_DIR\branding" | Out-Null
+    Copy-Item $ICON_ASSET.FullName "$BUILD_DIR\branding\icon.png" -Force
+    Write-Ok "Custom icon applied"
 }
 
-# Add Electron dependencies (upstream OpenChamber doesn't include them)
+# Update electron-builder
+$ebContent = Get-Content "$BUILD_DIR\electron-builder.json" -Raw | ConvertFrom-Json
+$ebContent.appId = "com.cowork.$PROVIDER_NAME"
+$ebContent.productName = $APP_NAME
+Write-Utf8NoBom "$BUILD_DIR\electron-builder.json" ($ebContent | ConvertTo-Json -Depth 10)
+
+# Inject sandbox rules
+$SERVER_JS = "$BUILD_DIR\packages\web\server\index.js"
+if ((Test-Path $SERVER_JS) -and -not (Select-String -Path $SERVER_JS -Pattern "ensureSandboxRules" -Quiet)) {
+    Copy-Item "$COWORK_REPO_DIR\CLAUDE.md" "$BUILD_DIR\packages\web\server\CLAUDE_TEMPLATE.md" -Force
+    $sandboxCode = @"
+
+// OpenCode Cowork: Auto-inject CLAUDE.md sandbox rules
+const __cowork_path = require('path');
+const __cowork_fs = require('fs');
+function ensureSandboxRules(directory) {
+  if (!directory) return;
+  const claudePath = __cowork_path.join(directory, 'CLAUDE.md');
+  try {
+    const templatePath = __cowork_path.join(__dirname, 'CLAUDE_TEMPLATE.md');
+    let rules = '';
+    if (__cowork_fs.existsSync(templatePath)) { rules = __cowork_fs.readFileSync(templatePath, 'utf8'); }
+    if (!rules) return;
+    __cowork_fs.writeFileSync(claudePath, rules, 'utf8');
+    if (process.platform === 'win32') { try { require('child_process').execSync('attrib +H +S "' + claudePath + '"', { stdio: 'ignore', timeout: 5000 }); } catch (e) {} }
+  } catch (e) {}
+}
+"@
+    Add-Content -Path $SERVER_JS -Value $sandboxCode -Encoding UTF8
+    Write-Ok "Sandbox injection ready"
+}
+
+# Save branding
+Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NAME`",`"provider`":`"$PROVIDER_DISPLAY`"}"
+
+# Install and build
 Write-Host "  Adding Electron dependencies..."
-Set-Location $BUILD_DIR
 bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | Select-Object -Last 1
-
-Write-Host "  Installing dependencies..."
+Write-Host "  Installing all dependencies..."
 bun install 2>&1 | Select-Object -Last 1
-Write-Host "  Building branded frontend..."
+Write-Host "  Building frontend..."
 bun run build:web 2>&1 | Select-Object -Last 3
 Write-Ok "Frontend built"
 
-# Build Electron app
-Write-Host "  Packaging desktop app (this may take a few minutes)..."
-$EXE_NAME = "$APP_NAME.exe"
-$INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"
-
-# Update electron-builder config with app name
-$ebConfig = "$BUILD_DIR\electron-builder.json"
-if (Test-Path $ebConfig) {
-    $eb = Get-Content $ebConfig -Raw | ConvertFrom-Json
-    $eb.appId = "com.cowork.$PROVIDER_NAME"
-    $eb.productName = $APP_NAME
-    $eb | ConvertTo-Json -Depth 5 | Set-Content $ebConfig -Encoding UTF8
-}
-
+# Build Electron
+Write-Host "  Packaging desktop app..."
+if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
+if (-not (Test-Path "$BUILD_DIR\branding\icon.png")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null; New-Item "$BUILD_DIR\branding\icon.png" -ItemType File -Force | Out-Null }
 bunx electron-builder --config electron-builder.json --win --x64 2>&1 | Select-String -Pattern "(building|packaging|target=)" | Select-Object -Last 5
 
+$EXE_NAME = "$APP_NAME.exe"
+$INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"
 $UNPACKED = "$BUILD_DIR\electron-dist\win-unpacked"
 $UNPACKED_EXE = "$UNPACKED\$EXE_NAME"
+
 if (-not (Test-Path $UNPACKED_EXE)) {
     $UNPACKED = "$BUILD_DIR\electron-dist\win-arm64-unpacked"
     $UNPACKED_EXE = "$UNPACKED\$EXE_NAME"
 }
 
 if (Test-Path $UNPACKED_EXE) {
-    Write-Host "  Installing to $INSTALL_DIR..."
     if (Test-Path $INSTALL_DIR) { Remove-Item -Recurse -Force $INSTALL_DIR }
     Copy-Item -Recurse $UNPACKED $INSTALL_DIR
 
-    $WshShell = New-Object -ComObject WScript.Shell
-    $ICON_PATH = "$INSTALL_DIR\$EXE_NAME"
-    if (Test-Path "$BUILD_DIR\branding\icon.ico") { $ICON_PATH = "$BUILD_DIR\branding\icon.ico" }
+    $ICON_PATH = "$BUILD_DIR\packages\desktop\src-tauri\icons\icon.ico"
+    if (-not (Test-Path $ICON_PATH)) { $ICON_PATH = "$INSTALL_DIR\$EXE_NAME" }
 
-    # Start Menu shortcut
+    $WshShell = New-Object -ComObject WScript.Shell
     $StartMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
     $Shortcut = $WshShell.CreateShortcut("$StartMenu\$APP_NAME.lnk")
     $Shortcut.TargetPath = "$INSTALL_DIR\$EXE_NAME"
     $Shortcut.WorkingDirectory = $INSTALL_DIR
-    $Shortcut.Description = $APP_NAME
+    $Shortcut.Description = "$APP_NAME - AI Assistant"
     $Shortcut.IconLocation = $ICON_PATH
     $Shortcut.Save()
     Write-Ok "Start Menu shortcut created"
 
-    # Desktop shortcut
     $DesktopPath = [System.Environment]::GetFolderPath("Desktop")
     if ([string]::IsNullOrWhiteSpace($DesktopPath)) { $DesktopPath = "$env:USERPROFILE\Desktop" }
     $DesktopShortcut = $WshShell.CreateShortcut("$DesktopPath\$APP_NAME.lnk")
     $DesktopShortcut.TargetPath = "$INSTALL_DIR\$EXE_NAME"
     $DesktopShortcut.WorkingDirectory = $INSTALL_DIR
-    $DesktopShortcut.Description = $APP_NAME
+    $DesktopShortcut.Description = "$APP_NAME - AI Assistant"
     $DesktopShortcut.IconLocation = $ICON_PATH
     $DesktopShortcut.Save()
     Write-Ok "Desktop shortcut created"
-
-    # Copy icon to install directory
-    foreach ($iconFile in @("icon.ico", "icon.png")) {
-        $src = "$BUILD_DIR\branding\$iconFile"
-        if (Test-Path $src) { Copy-Item $src "$INSTALL_DIR\$iconFile" -Force }
-    }
 
     $currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
     if ($currentPath -notlike "*$INSTALL_DIR*") {
         [System.Environment]::SetEnvironmentVariable("PATH", "$INSTALL_DIR;$currentPath", "User")
         $env:PATH = "$INSTALL_DIR;$env:PATH"
     }
-    Write-Ok "$APP_NAME desktop app installed"
+    Write-Ok "$APP_NAME installed to $INSTALL_DIR"
 } else {
-    Write-Warn "Desktop build failed. You can still run: opencode web"
+    Write-Warn "Build produced no executable. You can still run: opencode web"
 }
 Write-Host ""
 
-# ── Step 4: Configure ────────────────────────────────────────
+# Step 4: Configure AI models
 Write-Host "Step 4: Configuring AI models..." -ForegroundColor White
 
 $OPENCODE_CONFIG_DIR = "$env:USERPROFILE\.config\opencode"
@@ -284,23 +277,6 @@ if (Test-Path $TEMPLATE) {
     Write-Ok "AI models configured (default: $DEFAULT_MODEL)"
 }
 
-# Add extra models from models.json if it exists
-$modelsFile = "$COWORK_REPO_DIR\config\models.json"
-if (Test-Path $modelsFile) {
-    try {
-        $configPath = "$OPENCODE_CONFIG_DIR\opencode.json"
-        $config = Get-Content $configPath -Raw | ConvertFrom-Json
-        $models = Get-Content $modelsFile -Raw | ConvertFrom-Json
-        foreach ($prop in $models.models.PSObject.Properties) {
-            $config.provider.$PROVIDER_NAME.models | Add-Member -NotePropertyName $prop.Name -NotePropertyValue $prop.Value -Force
-        }
-        $config | ConvertTo-Json -Depth 20 | Set-Content $configPath -Encoding UTF8
-        Write-Ok "Additional models loaded from models.json"
-    } catch {
-        Write-Warn "Could not load models.json — using default model only"
-    }
-}
-
 # Install npm provider SDK
 $pkgJsonContent = '{ "dependencies": { "@ai-sdk/openai-compatible": "latest", "@opencode-ai/plugin": "1.2.27" } }'
 Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\package.json" $pkgJsonContent
@@ -310,17 +286,18 @@ Pop-Location
 if (Test-Path "$OPENCODE_CONFIG_DIR\node_modules\@ai-sdk") {
     Write-Ok "AI provider SDK installed"
 } else {
-    Write-Warn "SDK install may have failed — will retry on first launch"
+    Write-Warn "SDK install may have failed -- will retry on first launch"
 }
 
-# Deploy commands (legal + finance) — Anthropic plugins use SKILL.md in subdirectories
-foreach ($cmdType in @("legal", "finance")) {
-    $CMDS_SRC = "$COWORK_REPO_DIR\commands\$cmdType"
+# Legal + Finance commands
+foreach ($CMD_TYPE in @("legal", "finance")) {
+    $CMDS_SRC = "$COWORK_REPO_DIR\commands\$CMD_TYPE"
     if (Test-Path $CMDS_SRC) {
-        $CMDS_DEST = "$OPENCODE_CONFIG_DIR\commands\$cmdType"
-        Copy-Item -Recurse -Force $CMDS_SRC "$OPENCODE_CONFIG_DIR\commands\" -ErrorAction SilentlyContinue
-        $skillCount = (Get-ChildItem -Recurse "$CMDS_DEST" -Filter "SKILL.md" -ErrorAction SilentlyContinue).Count
-        Write-Ok "$skillCount $cmdType skills installed"
+        $CMDS_DEST = "$OPENCODE_CONFIG_DIR\commands\$CMD_TYPE"
+        if (Test-Path $CMDS_DEST) { Remove-Item -Recurse -Force $CMDS_DEST }
+        Copy-Item -Recurse $CMDS_SRC $CMDS_DEST
+        $skillCount = (Get-ChildItem "$CMDS_DEST" -Recurse -Filter "SKILL.md").Count
+        Write-Ok "$skillCount $CMD_TYPE skills installed"
     }
 }
 
@@ -331,7 +308,7 @@ if (Test-Path $RULES_SRC) {
     Write-Ok "Agent rules deployed"
 }
 
-# Create default project directory with CLAUDE.md from the repo
+# Default project with sandbox rules
 $DEFAULT_PROJECT = "$env:USERPROFILE\$APP_NAME Projects"
 New-Item -ItemType Directory -Force -Path $DEFAULT_PROJECT | Out-Null
 $CLAUDE_SRC = "$COWORK_REPO_DIR\CLAUDE.md"
@@ -339,12 +316,14 @@ if (Test-Path $CLAUDE_SRC) {
     attrib -H -S "$DEFAULT_PROJECT\CLAUDE.md" 2>$null
     Copy-Item $CLAUDE_SRC "$DEFAULT_PROJECT\CLAUDE.md" -Force
     attrib +H +S "$DEFAULT_PROJECT\CLAUDE.md" 2>$null
-    Write-Ok "Sandbox rules deployed from CLAUDE.md"
+    Write-Ok "Sandbox rules deployed (hidden)"
 }
-# Also save a copy as the template for the web server to inject into new directories
-New-Item -ItemType Directory -Force -Path "$OPENCODE_CONFIG_DIR\sandbox" | Out-Null
-Copy-Item $CLAUDE_SRC "$OPENCODE_CONFIG_DIR\sandbox\CLAUDE.md.template" -Force
-Write-Ok "Default project directory: $DEFAULT_PROJECT"
+# Save template for auto-injection
+$sandboxDir = "$OPENCODE_CONFIG_DIR\sandbox"
+New-Item -ItemType Directory -Force -Path $sandboxDir | Out-Null
+Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
+
+Write-Ok "Default project: $DEFAULT_PROJECT"
 
 # Settings
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
@@ -354,25 +333,24 @@ foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.con
 
 [System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $API_KEY, "User")
 $env:COWORK_API_KEY = $API_KEY
-Write-Ok "API key saved"
+Write-Ok "API key set"
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host "  ║         Installation Complete!            ║" -ForegroundColor Blue
-Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Blue
+Write-Host "  +==========================================+" -ForegroundColor Blue
+Write-Host "  |         Installation Complete!            |" -ForegroundColor Blue
+Write-Host "  +==========================================+" -ForegroundColor Blue
 Write-Host ""
-Write-Host "  ✓ $APP_NAME desktop app installed" -ForegroundColor Green
-Write-Host "  ✓ AI models configured (default: $DEFAULT_MODEL)" -ForegroundColor Green
-Write-Host "  ✓ oh-my-opencode plugin enabled" -ForegroundColor Green
-Write-Host "  ✓ Legal + Finance commands" -ForegroundColor Green
-Write-Host "  ✓ Directory sandbox active" -ForegroundColor Green
-Write-Host ""
-Write-Host "  Default project: $DEFAULT_PROJECT"
-Write-Host "  Launch from: Start Menu, Desktop shortcut, or type '$APP_NAME' in Run."
+Write-Host "  * $APP_NAME desktop app" -ForegroundColor Green
+Write-Host "  * AI models (default: $DEFAULT_MODEL)" -ForegroundColor Green
+Write-Host "  * oh-my-opencode plugin" -ForegroundColor Green
+Write-Host "  * Legal + Finance commands" -ForegroundColor Green
+Write-Host "  * Directory sandbox (hidden CLAUDE.md)" -ForegroundColor Green
 Write-Host ""
 
 $launch = Read-Host "  Launch now? (y/n)"
 if ($launch -match "^[Yy]") {
-    Start-Process -FilePath "$INSTALL_DIR\$EXE_NAME" -WorkingDirectory $INSTALL_DIR -WindowStyle Normal
-    Write-Host "  $APP_NAME is running. You can close this terminal." -ForegroundColor Green
+    if (Test-Path "$INSTALL_DIR\$EXE_NAME") {
+        Start-Process -FilePath "$INSTALL_DIR\$EXE_NAME" -WorkingDirectory $INSTALL_DIR -WindowStyle Normal
+        Write-Host "  $APP_NAME is running. You can close this terminal." -ForegroundColor Green
+    }
 }

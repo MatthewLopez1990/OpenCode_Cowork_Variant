@@ -11,11 +11,13 @@ out/
 .nuxt/
 .output/
 *.tsbuildinfo
+electron-dist/
 
 # Electron build artifacts
 electron/dist/
 electron/out/
 release/
+releases/
 
 # Environment and secrets
 .env
@@ -44,11 +46,6 @@ pnpm-debug.log*
 # Testing
 coverage/
 .nyc_output/
-
-# Package manager lock files (keep one, ignore others if needed)
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
 
 # OS files
 .DS_Store
@@ -79,3 +76,20 @@ venv/
 *.deb
 *.rpm
 *.snap
+
+# Build artifacts
+*.tgz
+*.vsix
+/npm
+/tsc
+local-dev*
+.opencode/plans/*
+.hive
+.gradle/
+.*.bun-build
+data/
+workspaces/
+*.pid
+
+# Branding (user provides their own)
+branding/

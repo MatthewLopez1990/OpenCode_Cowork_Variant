@@ -110,7 +110,7 @@ chmod +x install-linux.sh
 |--------|-------------|---------|
 | **App name** | Title bar, shortcuts, branding everywhere | `Acme AI Assistant` |
 | **Provider display name** | Shows in the model selector UI | `Acme AI` |
-| **API base URL** | Your OpenAI-compatible API endpoint | `https://api.yourcompany.com/v1` |
+| **API base URL** | Your OpenAI-compatible API endpoint | `https://api.yourcompany.com/api` |
 | **API key** | Authentication for your API | `sk-abc123...` |
 | **Default model ID** | The model identifier your API expects | `gpt-4o` |
 | **Default model display name** | Human-readable name in the UI | `GPT-4o` |
@@ -234,7 +234,7 @@ Edit `~/.config/opencode/opencode.json` and update the `provider` section:
     "models": { ... },
     "options": {
       "apiKey": "your-new-key",
-      "baseURL": "https://new-api-url.com/v1"
+      "baseURL": "https://new-api-url.com/api"
     }
   }
 }
