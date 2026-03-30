@@ -6999,6 +6999,47 @@ function setupProxy(app) {
     }
   };
 
+  // ── Cowork provider filter ──────────────────────────────────────────
+  // Only return providers whose source is "config" (user's opencode.json)
+  // so the UI doesn't show all 100+ built-in providers.
+  app.get('/api/provider', async (req, res) => {
+    try {
+      if (!openCodePort) {
+        return res.status(503).json({ error: 'OpenCode not ready' });
+      }
+      const targetUrl = buildOpenCodeUrl('/provider', '');
+      const headers = collectForwardHeaders(req);
+
+      const upstreamResponse = await fetch(targetUrl, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!upstreamResponse.ok) {
+        const body = await upstreamResponse.text().catch(() => '');
+        return res.status(upstreamResponse.status).send(body);
+      }
+
+      const data = await upstreamResponse.json();
+
+      // Response is { all: [...], default: {...} } — filter the all array
+      if (data && Array.isArray(data.all)) {
+        const totalCount = data.all.length;
+        data.all = data.all.filter(p => p.source === 'config');
+        console.log(`[Cowork] Filtered providers: ${data.all.length} config-sourced (from ${totalCount} total)`);
+      }
+
+      res.json(data);
+    } catch (error) {
+      console.error('[Cowork] Provider filter error:', error?.message);
+      if (!res.headersSent) {
+        res.status(503).json({ error: 'Failed to fetch providers' });
+      }
+    }
+  });
+  // ── End Cowork provider filter ──────────────────────────────────────
+
   // Dedicated forwarder for large session message payloads.
   // This avoids edge-cases in generic proxy streaming for multi-file attachments.
   app.post('/api/session/:sessionId/message', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
