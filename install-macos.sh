@@ -195,10 +195,13 @@ if [ -f "$INDEX_HTML" ]; then
         sed -i '' 's|src="[^"]*logo[^"]*\.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
     fi
 
-    # Update meta tags
+    # Update meta tags and JavaScript app name
     sed -i '' "s|content=\"OpenCode Cowork\"|content=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
     sed -i '' "s|content=\"OpenChamber[^\"]*\"|content=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
     sed -i '' "s|alt=\"Loading\"|alt=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
+    # Replace the JavaScript defaultAppName variable (controls title bar)
+    sed -i '' "s|const defaultAppName = '[^']*'|const defaultAppName = '$APP_NAME'|g" "$INDEX_HTML" 2>/dev/null
+    sed -i '' "s|const defaultShortName = '[^']*'|const defaultShortName = '$APP_NAME'|g" "$INDEX_HTML" 2>/dev/null
 fi
 
 # -- 3e: Update electron-builder.json with correct paths --

@@ -140,6 +140,8 @@ if (Test-Path $INDEX_HTML) {
     $htmlContent = $htmlContent -replace 'content="OpenCode Cowork"', "content=`"$APP_NAME`""
     $htmlContent = $htmlContent -replace 'content="OpenChamber[^"]*"', "content=`"$APP_NAME`""
     $htmlContent = $htmlContent -replace 'alt="Loading"', "alt=`"$APP_NAME`""
+    $htmlContent = $htmlContent -replace "const defaultAppName = '[^']*'", "const defaultAppName = '$APP_NAME'"
+    $htmlContent = $htmlContent -replace "const defaultShortName = '[^']*'", "const defaultShortName = '$APP_NAME'"
     if ($LOGO_ASSET) {
         Copy-Item $LOGO_ASSET.FullName "$BUILD_DIR\packages\web\public\cowork-logo.png" -Force
         $htmlContent = $htmlContent -replace 'src="[^"]*logo[^"]*\.svg"', 'src="/cowork-logo.png"'
