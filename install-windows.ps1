@@ -293,7 +293,32 @@ if (Test-Path $TEMPLATE) {
     $content = $content -replace '__DEFAULT_MODEL__', $DEFAULT_MODEL
     $content = $content -replace '__DEFAULT_MODEL_DISPLAY__', $DEFAULT_MODEL_DISPLAY
     Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\opencode.json" $content
+    # Also copy to build directory (OpenCode reads config from CWD)
+    Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
     Write-Ok "AI models configured (default: $DEFAULT_MODEL)"
+}
+
+# Merge extra models from config/models.json
+$MODELS_FILE = "$COWORK_REPO_DIR\config\models.json"
+if (Test-Path $MODELS_FILE) {
+    try {
+        $config = Get-Content "$OPENCODE_CONFIG_DIR\opencode.json" -Raw | ConvertFrom-Json
+        $extra = Get-Content $MODELS_FILE -Raw | ConvertFrom-Json
+        $providerKey = $PROVIDER_NAME
+        if ($config.provider.PSObject.Properties[$providerKey]) {
+            $extraModels = $extra.models.PSObject.Properties
+            $added = 0
+            foreach ($m in $extraModels) {
+                $config.provider.$providerKey.models | Add-Member -MemberType NoteProperty -Name $m.Name -Value $m.Value -Force
+                $added++
+            }
+            Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\opencode.json" ($config | ConvertTo-Json -Depth 10)
+            Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
+            Write-Ok "Added $added extra models from models.json"
+        }
+    } catch {
+        Write-Warn "Could not merge extra models: $_"
+    }
 }
 
 # Install npm provider SDK
