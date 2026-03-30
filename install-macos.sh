@@ -5,10 +5,9 @@ set -e
 #  OpenCode Cowork — macOS Installer
 #  White-label AI assistant for any enterprise
 #
-#  Prompts for: App name, API URL, API key, logos
-#  Installs: Bun, OpenCode CLI, branded desktop app
-#  Configures: AI models, oh-my-opencode plugin,
-#              legal + finance commands, directory sandbox
+#  Clones OpenChamber, patches branding into the source,
+#  builds Electron desktop app, configures AI models,
+#  deploys sandbox rules.
 # ============================================================
 
 BLUE='\033[0;34m'
@@ -29,7 +28,7 @@ echo -e "${BLUE}${BOLD}║  White-label AI for your organization      ║${NC}"
 echo -e "${BLUE}${BOLD}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-# Step 1: Branding
+# ── Step 1: Organization Setup ───────────────────────────────
 echo -e "${BOLD}Step 1: Organization Setup${NC}"
 echo ""
 
@@ -73,14 +72,14 @@ echo ""
 echo -e "${GREEN}✓${NC} Organization: $APP_NAME"
 echo -e "${GREEN}✓${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
 echo -e "${GREEN}✓${NC} Model: $DEFAULT_MODEL"
-# Check for local branding assets
+
 ICON_ASSET="$COWORK_REPO_DIR/assets/icon.png"
 LOGO_ASSET="$COWORK_REPO_DIR/assets/logo.png"
-[ -f "$ICON_ASSET" ] && echo -e "${GREEN}✓${NC} Icon: assets/icon.png" || echo -e "  - No custom icon (assets/icon.png) — using defaults"
-[ -f "$LOGO_ASSET" ] && echo -e "${GREEN}✓${NC} Logo: assets/logo.png" || echo -e "  - No custom logo (assets/logo.png) — using defaults"
+[ -f "$ICON_ASSET" ] && echo -e "${GREEN}✓${NC} Icon: assets/icon.png" || echo -e "  - No custom icon — using defaults"
+[ -f "$LOGO_ASSET" ] && echo -e "${GREEN}✓${NC} Logo: assets/logo.png" || echo -e "  - No custom logo — using defaults"
 echo ""
 
-# Step 2: Prerequisites
+# ── Step 2: Prerequisites ────────────────────────────────────
 echo -e "${BOLD}Step 2: Installing prerequisites...${NC}"
 
 if ! command -v bun &>/dev/null; then
@@ -97,7 +96,7 @@ fi
 echo -e "${GREEN}✓${NC} OpenCode CLI"
 echo ""
 
-# Step 3: Clone and build
+# ── Step 3: Clone, Patch, and Build ──────────────────────────
 echo -e "${BOLD}Step 3: Building $APP_NAME...${NC}"
 
 if [ -d "$BUILD_DIR" ]; then
@@ -107,14 +106,15 @@ else
 fi
 cd "$BUILD_DIR"
 
-# Copy electron config from Cowork repo into the cloned OpenChamber
+# ── 3a: Copy Electron config ─────────────────────────────────
+echo -e "  Applying Electron configuration..."
 mkdir -p "$BUILD_DIR/electron"
-[ -f "$COWORK_REPO_DIR/electron/main.cjs" ] && cp "$COWORK_REPO_DIR/electron/main.cjs" "$BUILD_DIR/electron/main.cjs"
-[ -f "$COWORK_REPO_DIR/electron-builder.json" ] && cp "$COWORK_REPO_DIR/electron-builder.json" "$BUILD_DIR/electron-builder.json"
+cp "$COWORK_REPO_DIR/electron/main.cjs" "$BUILD_DIR/electron/main.cjs"
+cp "$COWORK_REPO_DIR/electron-builder.json" "$BUILD_DIR/electron-builder.json"
 
-# Set app name in package.json
-if [ -f "$BUILD_DIR/package.json" ]; then
-    python3 -c "
+# ── 3b: Patch package.json ───────────────────────────────────
+echo -e "  Setting app name in package.json..."
+python3 -c "
 import json
 with open('$BUILD_DIR/package.json') as f:
     pkg = json.load(f)
@@ -123,60 +123,178 @@ pkg['productName'] = '$APP_NAME'
 pkg['main'] = 'electron/main.cjs'
 with open('$BUILD_DIR/package.json', 'w') as f:
     json.dump(pkg, f, indent=2)
-" 2>/dev/null
-fi
+"
 
-# Save branding
-echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
-
-# Apply branding assets from the assets/ folder (auto-resize with sips)
+# ── 3c: Apply branding assets ────────────────────────────────
+echo -e "  Applying branding..."
 mkdir -p "$BUILD_DIR/branding"
+mkdir -p "$BUILD_DIR/packages/desktop/src-tauri/icons"
+
 if [ -f "$ICON_ASSET" ]; then
+    # Auto-resize to all required sizes
+    sips -z 512 512 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
+    sips -z 256 256 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-256.png" 2>/dev/null
+    sips -z 180 180 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-180.png" 2>/dev/null
+    sips -z 32 32 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-32.png" 2>/dev/null
+    sips -z 16 16 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-16.png" 2>/dev/null
     cp "$ICON_ASSET" "$BUILD_DIR/branding/icon.png"
-    # Auto-resize icon to standard sizes using macOS built-in sips
-    sips -z 512 512 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
-    sips -z 256 256 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-256.png" 2>/dev/null
-    sips -z 32 32 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-32.png" 2>/dev/null
-    sips -z 16 16 "$BUILD_DIR/branding/icon.png" --out "$BUILD_DIR/branding/icon-16.png" 2>/dev/null
-    # Copy resized icons to standard locations
-    for DIR in "$BUILD_DIR/packages/web/public" "$BUILD_DIR/packages/desktop/src-tauri/icons"; do
-        if [ -d "$DIR" ]; then
-            cp "$BUILD_DIR/branding/icon-32.png" "$DIR/favicon.png" 2>/dev/null
-            cp "$BUILD_DIR/branding/icon-512.png" "$DIR/icon.png" 2>/dev/null
-            cp "$BUILD_DIR/branding/icon-256.png" "$DIR/icon-256.png" 2>/dev/null
-        fi
-    done
-    echo -e "${GREEN}✓${NC} Custom icon applied (auto-resized to 512, 256, 32, 16)"
+
+    # Create .icns for macOS (required by electron-builder)
+    ICONSET_DIR="$BUILD_DIR/branding/app.iconset"
+    mkdir -p "$ICONSET_DIR"
+    sips -z 16 16 "$ICON_ASSET" --out "$ICONSET_DIR/icon_16x16.png" 2>/dev/null
+    sips -z 32 32 "$ICON_ASSET" --out "$ICONSET_DIR/icon_16x16@2x.png" 2>/dev/null
+    sips -z 32 32 "$ICON_ASSET" --out "$ICONSET_DIR/icon_32x32.png" 2>/dev/null
+    sips -z 64 64 "$ICON_ASSET" --out "$ICONSET_DIR/icon_32x32@2x.png" 2>/dev/null
+    sips -z 128 128 "$ICON_ASSET" --out "$ICONSET_DIR/icon_128x128.png" 2>/dev/null
+    sips -z 256 256 "$ICON_ASSET" --out "$ICONSET_DIR/icon_128x128@2x.png" 2>/dev/null
+    sips -z 256 256 "$ICON_ASSET" --out "$ICONSET_DIR/icon_256x256.png" 2>/dev/null
+    sips -z 512 512 "$ICON_ASSET" --out "$ICONSET_DIR/icon_256x256@2x.png" 2>/dev/null
+    sips -z 512 512 "$ICON_ASSET" --out "$ICONSET_DIR/icon_512x512.png" 2>/dev/null
+    sips -z 1024 1024 "$ICON_ASSET" --out "$ICONSET_DIR/icon_512x512@2x.png" 2>/dev/null
+    iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" 2>/dev/null || true
+    rm -rf "$ICONSET_DIR"
+
+    # Copy to all standard locations
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.png" 2>/dev/null
+    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon.png" 2>/dev/null
+    cp "$BUILD_DIR/branding/icon-16.png" "$BUILD_DIR/packages/web/public/favicon-16.png" 2>/dev/null
+    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon-32.png" 2>/dev/null
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/pwa-512.png" 2>/dev/null
+    cp "$BUILD_DIR/branding/icon-180.png" "$BUILD_DIR/packages/web/public/apple-touch-icon.png" 2>/dev/null
+    # For electron-builder extraResources
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" 2>/dev/null
+    echo -e "${GREEN}✓${NC} Custom icon applied (resized + .icns created)"
 fi
+
 if [ -f "$LOGO_ASSET" ]; then
-    cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/logo.png" 2>/dev/null
+    cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/cowork-logo.png" 2>/dev/null
     echo -e "${GREEN}✓${NC} Custom logo applied"
 fi
 
-# Update HTML title
+# ── 3d: Patch index.html with branding ───────────────────────
+echo -e "  Patching HTML with branding..."
 INDEX_HTML="$BUILD_DIR/packages/web/index.html"
-[ -f "$INDEX_HTML" ] && sed -i '' "s|<title>[^<]*</title>|<title>$APP_NAME</title>|" "$INDEX_HTML" 2>/dev/null
+if [ -f "$INDEX_HTML" ]; then
+    # Replace title
+    sed -i '' "s|<title>[^<]*</title>|<title>$APP_NAME</title>|g" "$INDEX_HTML" 2>/dev/null
 
-# Add Electron dependencies (upstream OpenChamber doesn't include them)
-echo -e "Adding Electron dependencies..."
+    # Replace the loading screen logo
+    if [ -f "$LOGO_ASSET" ]; then
+        # Find and replace the logo img src in the loading screen
+        sed -i '' 's|src="/logo-dark-512x512.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
+        sed -i '' 's|src="/logo-light-512x512.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
+        # Also try OpenChamber's default logo references
+        sed -i '' 's|src="[^"]*logo[^"]*\.svg"|src="/cowork-logo.png"|g' "$INDEX_HTML" 2>/dev/null
+    fi
+
+    # Update meta tags
+    sed -i '' "s|content=\"OpenChamber[^\"]*\"|content=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
+    sed -i '' "s|alt=\"OpenChamber\"|alt=\"$APP_NAME\"|g" "$INDEX_HTML" 2>/dev/null
+fi
+
+# ── 3e: Update electron-builder.json with correct paths ──────
+echo -e "  Updating build configuration..."
+python3 -c "
+import json
+with open('$BUILD_DIR/electron-builder.json') as f:
+    eb = json.load(f)
+eb['appId'] = 'com.cowork.$(echo "$PROVIDER_NAME")'
+eb['productName'] = '$APP_NAME'
+eb['extraResources'] = [
+    {'from': 'packages/web/public/cowork-icon.png', 'to': 'icon.png'},
+    {'from': 'branding/icon.png', 'to': 'icon-original.png'}
+]
+if 'mac' not in eb: eb['mac'] = {}
+eb['mac']['icon'] = 'packages/desktop/src-tauri/icons/icon.icns'
+eb['mac']['category'] = 'public.app-category.productivity'
+if 'win' not in eb: eb['win'] = {}
+eb['win']['icon'] = 'packages/desktop/src-tauri/icons/icon.png'
+with open('$BUILD_DIR/electron-builder.json', 'w') as f:
+    json.dump(eb, f, indent=2)
+"
+
+# ── 3f: Inject ensureSandboxRules into server ─────────────────
+echo -e "  Injecting sandbox rules into server..."
+SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
+if [ -f "$SERVER_JS" ] && ! grep -q "ensureSandboxRules" "$SERVER_JS"; then
+    # Read the CLAUDE.md template
+    CLAUDE_CONTENT=""
+    if [ -f "$COWORK_REPO_DIR/CLAUDE.md" ]; then
+        CLAUDE_CONTENT=$(cat "$COWORK_REPO_DIR/CLAUDE.md" | sed 's/\\/\\\\/g' | sed 's/`/\\`/g' | sed 's/\$/\\$/g')
+    fi
+
+    # Inject the function before the first "async function" in the file
+    python3 << 'PYEOF'
+import re
+
+with open("$SERVER_JS", "r") as f:
+    content = f.read()
+
+claude_content = open("$COWORK_REPO_DIR/CLAUDE.md").read().replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
+
+sandbox_code = '''
+// OpenCode Cowork: Auto-inject CLAUDE.md sandbox rules into every project directory
+function ensureSandboxRules(directory) {
+  if (!directory) return;
+  const claudePath = require('path').join(directory, 'CLAUDE.md');
+  try {
+    const rules = `''' + claude_content + '''`;
+    require('fs').writeFileSync(claudePath, rules, 'utf8');
+    if (process.platform === 'win32') {
+      try {
+        require('child_process').execSync('attrib +H +S "' + claudePath + '"', { stdio: 'ignore', timeout: 5000 });
+      } catch (e) {}
+    }
+    console.log('[Sandbox] Created CLAUDE.md in ' + directory);
+  } catch (e) {}
+}
+'''
+
+# Find a good injection point - before the first export or module.exports
+# Or at the end of the file before the last export
+if 'export default' in content or 'module.exports' in content:
+    # Inject before the last export
+    last_export = content.rfind('export ')
+    if last_export == -1:
+        last_export = content.rfind('module.exports')
+    if last_export > 0:
+        content = content[:last_export] + sandbox_code + '\n' + content[last_export:]
+else:
+    # Just append
+    content += '\n' + sandbox_code
+
+with open("$SERVER_JS", "w") as f:
+    f.write(content)
+
+print("Sandbox rules injected into server")
+PYEOF
+fi
+
+# ── 3g: Save branding config ─────────────────────────────────
+echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
+
+# ── 3h: Install dependencies and build ────────────────────────
+echo -e "  Adding Electron dependencies..."
 cd "$BUILD_DIR"
 bun add --dev electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
 
-echo -e "Installing dependencies..."
+echo -e "  Installing all dependencies..."
 bun install 2>&1 | tail -1
-echo -e "Building frontend..."
+
+echo -e "  Building frontend..."
 bun run build:web 2>&1 | tail -3
 echo -e "${GREEN}✓${NC} Frontend built"
 
-# Ensure branding files exist (electron-builder fails if extraResources are missing)
-mkdir -p "$BUILD_DIR/branding"
-[ ! -f "$BUILD_DIR/branding/icon.png" ] && echo "" > "$BUILD_DIR/branding/icon.png"
-[ ! -f "$BUILD_DIR/branding/icon.ico" ] && echo "" > "$BUILD_DIR/branding/icon.ico"
+# ── 3i: Build Electron app ───────────────────────────────────
+echo -e "  Packaging desktop app (this may take a few minutes)..."
+# Ensure branding placeholders exist for extraResources
+[ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && [ -f "$BUILD_DIR/branding/icon.png" ] && cp "$BUILD_DIR/branding/icon.png" "$BUILD_DIR/packages/web/public/cowork-icon.png"
+[ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && touch "$BUILD_DIR/packages/web/public/cowork-icon.png"
+[ ! -f "$BUILD_DIR/branding/icon.png" ] && touch "$BUILD_DIR/branding/icon.png"
 
-# Build native app
-echo -e "Packaging desktop app (this may take a few minutes)..."
-ELECTRON_BUILD_LOG=$(bunx electron-builder --config electron-builder.json --mac 2>&1)
-echo "$ELECTRON_BUILD_LOG" | grep -E "(Bundling|building|signing|Finished|target=|error|Error)" || true
+ELECTRON_LOG=$(bunx electron-builder --config electron-builder.json --mac 2>&1)
+echo "$ELECTRON_LOG" | grep -E "(signing|building|target=|error|Error)" || true
 
 BUILT_APP=$(find "$BUILD_DIR/electron-dist" -name "*.app" -maxdepth 3 2>/dev/null | head -1)
 DESKTOP_APP_INSTALLED=false
@@ -190,7 +308,7 @@ else
 fi
 echo ""
 
-# Step 4: Configure
+# ── Step 4: Configure AI ─────────────────────────────────────
 echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
@@ -212,10 +330,10 @@ cat > "$OPENCODE_CONFIG_DIR/package.json" << 'PKGJSON'
 }
 PKGJSON
 echo -ne "  Installing AI provider SDK..."
-(cd "$OPENCODE_CONFIG_DIR" && bun install 2>/dev/null) || (cd "$OPENCODE_CONFIG_DIR" && npm install --silent 2>/dev/null) || true
+(cd "$OPENCODE_CONFIG_DIR" && bun install 2>/dev/null) || true
 echo -e " ${GREEN}✓${NC}"
 
-# Commands (legal + finance) — Anthropic plugins use SKILL.md in subdirectories
+# Commands (legal + finance)
 mkdir -p "$OPENCODE_CONFIG_DIR/commands"
 for CMD_TYPE in legal finance; do
     CMDS_SRC="$COWORK_REPO_DIR/commands/$CMD_TYPE"
@@ -230,18 +348,17 @@ done
 # Agent rules
 [ -f "$COWORK_REPO_DIR/opencode.md" ] && cp "$COWORK_REPO_DIR/opencode.md" "$OPENCODE_CONFIG_DIR/opencode.md"
 
-# Default project with CLAUDE.md from the repo
+# Default project with CLAUDE.md
 DEFAULT_PROJECT="$HOME/$APP_NAME Projects"
 mkdir -p "$DEFAULT_PROJECT"
 CLAUDE_SRC="$COWORK_REPO_DIR/CLAUDE.md"
 if [ -f "$CLAUDE_SRC" ]; then
     cp "$CLAUDE_SRC" "$DEFAULT_PROJECT/CLAUDE.md"
-    echo -e "${GREEN}✓${NC} Sandbox rules deployed from CLAUDE.md"
+    echo -e "${GREEN}✓${NC} Sandbox rules deployed"
 fi
-# Save template for web server auto-injection into new directories
 mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
 cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
-echo -e "${GREEN}✓${NC} Default project directory: $DEFAULT_PROJECT"
+echo -e "${GREEN}✓${NC} Default project: $DEFAULT_PROJECT"
 
 # Settings
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
@@ -277,18 +394,11 @@ if [[ "$LAUNCH" =~ ^[Yy] ]]; then
         open "/Applications/$APP_NAME.app"
         echo -e "  ${GREEN}$APP_NAME is running.${NC}"
     else
-        echo -e "  Starting $APP_NAME in browser mode..."
+        echo -e "  Starting in browser mode..."
         cd "$BUILD_DIR"
         nohup bun run packages/web/server/index.js > /dev/null 2>&1 &
         sleep 3
-        # Find the port from the server output
-        PORT=$(lsof -ti :3000 2>/dev/null | head -1)
-        if [ -n "$PORT" ]; then
-            open "http://localhost:3000"
-        else
-            # Try to find any port the server started on
-            open "http://localhost:3000" 2>/dev/null || open "http://localhost:8080" 2>/dev/null
-        fi
-        echo -e "  ${GREEN}$APP_NAME is running in your browser. Keep this terminal open.${NC}"
+        open "http://localhost:3000" 2>/dev/null
+        echo -e "  ${GREEN}$APP_NAME is running in your browser.${NC}"
     fi
 fi

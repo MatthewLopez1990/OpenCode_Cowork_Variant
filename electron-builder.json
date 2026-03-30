@@ -10,16 +10,18 @@
   ],
   "npmRebuild": false,
   "extraResources": [
-    { "from": "branding/icon.png", "to": "icon.png" },
-    { "from": "branding/icon.ico", "to": "icon.ico" }
+    { "from": "packages/web/public/cowork-icon.png", "to": "icon.png" },
+    { "from": "branding/icon.png", "to": "icon-original.png" }
   ],
   "mac": {
     "category": "public.app-category.productivity",
+    "icon": "packages/desktop/src-tauri/icons/icon.icns",
     "target": [
       { "target": "dmg", "arch": ["arm64"] }
     ]
   },
   "win": {
+    "icon": "packages/desktop/src-tauri/icons/icon.png",
     "target": [
       { "target": "nsis", "arch": ["x64", "arm64"] }
     ]
@@ -29,6 +31,7 @@
     "perMachine": false
   },
   "linux": {
+    "icon": "packages/desktop/src-tauri/icons/icon.png",
     "category": "Office",
     "target": ["AppImage"]
   }
