@@ -105,12 +105,14 @@ fi
 echo -e "${GREEN}*${NC} Bun $(bun --version)"
 
 # OpenCode CLI
-if ! command -v opencode &>/dev/null; then
+# Always install/update OpenCode CLI
+echo -e "  Installing OpenCode CLI (latest)..."
+if true; then
     echo -e "${YELLOW}Installing OpenCode CLI...${NC}"
     curl -fsSL https://opencode.ai/install | bash
     export PATH="$HOME/.opencode/bin:$PATH"
 fi
-echo -e "${GREEN}*${NC} OpenCode CLI"
+echo -e "${GREEN}*${NC} OpenCode CLI $(opencode --version 2>/dev/null || echo installed)"
 echo ""
 
 # -- Step 3: Clone, Brand, and Build --

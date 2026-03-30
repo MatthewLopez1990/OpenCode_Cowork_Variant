@@ -97,11 +97,11 @@ if ! command -v bun &>/dev/null; then
 fi
 echo -e "${GREEN}*${NC} Bun $(bun --version)"
 
-if ! command -v opencode &>/dev/null; then
-    curl -fsSL https://opencode.ai/install | bash
-    export PATH="$HOME/.opencode/bin:$PATH"
-fi
-echo -e "${GREEN}*${NC} OpenCode CLI"
+# Always install/update OpenCode CLI to ensure latest version
+echo -e "  Installing OpenCode CLI (latest)..."
+curl -fsSL https://opencode.ai/install | bash 2>/dev/null
+export PATH="$HOME/.opencode/bin:$PATH"
+echo -e "${GREEN}*${NC} OpenCode CLI $(opencode --version 2>/dev/null || echo 'installed')"
 echo ""
 
 # -- Step 3: Clone, Brand, and Build --
@@ -335,6 +335,8 @@ mkdir -p "$OPENCODE_CONFIG_DIR"
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
     sed "s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__PROVIDER_NAME__|$PROVIDER_NAME|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    # Also copy to the build directory (OpenCode reads config from CWD)
+    cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null
 fi
 
 # Check for additional models in config/models.json

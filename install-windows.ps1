@@ -91,8 +91,9 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
 }
 Write-Ok "Bun $(bun --version 2>&1)"
 
-if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
-    Write-Host "  Installing OpenCode CLI..."
+# Always install/update OpenCode CLI to latest version
+Write-Host "  Installing OpenCode CLI (latest)..."
+if ($true) {
     $ocArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") { "arm64" } else { "x64" }
     $ocUrl = "https://github.com/anomalyco/opencode/releases/latest/download/opencode-windows-${ocArch}.zip"
     $ocZip = "$env:TEMP\opencode.zip"
