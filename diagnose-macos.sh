@@ -379,41 +379,104 @@ except:
 " 2>/dev/null
     fi
 
-    # --- Session creation test ---
+    # --- Model object inspection ---
     echo ""
-    echo "  --- Session creation test ---"
+    echo "  --- Model objects (do they have id/providerID?) ---"
+    echo "$PROV_RESP" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    provs = d.get('providers', d.get('all', []))
+    for p in provs[:2]:
+        models = p.get('models', {})
+        if isinstance(models, dict):
+            for mid, mobj in list(models.items())[:2]:
+                has_id = 'id' in mobj
+                has_pid = 'providerID' in mobj
+                status = mobj.get('status','?')
+                print(f'    {mid}: id={mobj.get(\"id\",\"MISSING\")}, providerID={mobj.get(\"providerID\",\"MISSING\")}, status={status}')
+                if not has_id:
+                    print(f'    $F Model has no \"id\" field — auto-selection will fail!')
+                if not has_pid:
+                    print(f'    $F Model has no \"providerID\" — message send will fail!')
+        elif isinstance(models, list):
+            for m in models[:2]:
+                print(f'    {m.get(\"id\",\"MISSING\")}: providerID={m.get(\"providerID\",\"MISSING\")}')
+except: print(f'  Could not inspect models')
+" 2>/dev/null
+
+    # --- Session + message test ---
+    echo ""
+    echo "  --- Session creation + message send test ---"
     PROJECT_DIR=""
     [ -n "$BRAND_APP" ] && [ -d "$HOME/$BRAND_APP Projects" ] && PROJECT_DIR="$HOME/$BRAND_APP Projects"
     if [ -z "$PROJECT_DIR" ]; then
         echo "  $W No project directory to test with"
     else
+        # Get provider and model IDs
+        PROV_ID=$(echo "$PROV_RESP" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+provs = d.get('providers', d.get('all', []))
+if provs: print(provs[0].get('id',''))
+" 2>/dev/null)
+        MODEL_ID=$(python3 -c "import json; print(json.load(open('$HOME/.config/opencode/opencode.json')).get('model',''))" 2>/dev/null)
+        echo "  Using: provider=$PROV_ID model=$MODEL_ID dir=$PROJECT_DIR"
+
+        # Step 1: Create session
         SESS_RESP=$(curl -s -m 10 -X POST "http://localhost:$WEB_PORT/api/session" \
           -H "Content-Type: application/json" \
           -H "x-opencode-directory: $PROJECT_DIR" \
           -d "{}" 2>/dev/null)
-        echo "$SESS_RESP" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    if isinstance(d, dict) and d.get('id'):
-        print(f'  $P Session created: {d[\"id\"][:8]}...')
-    elif isinstance(d, dict) and 'error' in d:
-        print(f'  $F Session creation failed: {d[\"error\"]}')
-        err = str(d.get('error',''))
-        if 'directory' in err.lower():
-            print(f'     WHY: No working directory configured')
-            print(f'     FIX: Settings need a project entry (re-run installer)')
-        elif 'provider' in err.lower() or 'model' in err.lower():
-            print(f'     WHY: Model or provider resolution failed')
+        SESS_ID=$(echo "$SESS_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+
+        if [ -z "$SESS_ID" ]; then
+            echo "  $F Session creation failed"
+            echo "  Raw response: $(echo "$SESS_RESP" | head -c 200)"
+            echo "     WHY: OpenCode backend rejected the session creation request."
+        else
+            echo "  $P Session created: ${SESS_ID:0:12}..."
+
+            # Step 2: Send a message
+            echo "  Sending test message..."
+            MSG_RESP=$(curl -s -m 30 -X POST "http://localhost:$WEB_PORT/api/session/$SESS_ID/message" \
+              -H "Content-Type: application/json" \
+              -H "x-opencode-directory: $PROJECT_DIR" \
+              -d "{\"parts\":[{\"type\":\"text\",\"text\":\"Say hi\"}],\"providerID\":\"$PROV_ID\",\"modelID\":\"$MODEL_ID\"}" 2>/dev/null)
+
+            MSG_STATUS=$?
+            if [ $MSG_STATUS -ne 0 ]; then
+                echo "  $F Message send failed (curl error $MSG_STATUS)"
+            elif [ -z "$MSG_RESP" ]; then
+                echo "  $F Empty response from message send"
+                echo "     WHY: The server may not be proxying to the Go backend,"
+                echo "          or the Go backend crashed when processing the request."
+            else
+                MSG_LEN=${#MSG_RESP}
+                # Check for error in response
+                echo "$MSG_RESP" | head -c 500 | python3 -c "
+import sys
+data = sys.stdin.read()
+if 'error' in data.lower() and 'Error' in data:
+    # Find the error
+    import re
+    errs = re.findall(r'\"error\":\s*\"([^\"]+)\"', data)
+    if errs:
+        print(f'  $F Message error: {errs[0]}')
     else:
-        print(f'  $I Response: {str(d)[:150]}')
-except:
-    resp = '$SESS_RESP'
-    if resp:
-        print(f'  $I Raw: {resp[:150]}')
-    else:
-        print(f'  $F Empty response — server may not be proxying to OpenCode')
+        print(f'  $F Response contains error: {data[:200]}')
+elif len(data) > 10:
+    print(f'  $P Message sent ({len(data)} bytes response)')
+    # Show first event
+    lines = data.strip().split(chr(10))
+    for l in lines[:3]:
+        if l.strip():
+            print(f'    {l[:120]}')
+else:
+    print(f'  $W Short response: {data}')
 " 2>/dev/null
+            fi
+        fi
     fi
 fi
 echo ""
@@ -424,8 +487,20 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 for f in icon.png logo.png; do
     ASSET="$REPO/assets/$f"
     if [ -f "$ASSET" ]; then
-        DIM=$(sips -g pixelWidth -g pixelHeight "$ASSET" 2>/dev/null | awk '/pixel/{printf "%s", $2; if(NR%2==0) print ""; else printf "x"}')
-        echo "  $P $f: $(ls -lh "$ASSET" | awk '{print $5}'), ${DIM}"
+        W=$(sips -g pixelWidth "$ASSET" 2>/dev/null | awk '/pixelWidth/{print $2}')
+        H=$(sips -g pixelHeight "$ASSET" 2>/dev/null | awk '/pixelHeight/{print $2}')
+        echo "  $f: $(ls -lh "$ASSET" | awk '{print $5}'), ${W}x${H}"
+        if [ "$f" = "icon.png" ]; then
+            if [ -n "$W" ] && [ "$W" -lt 512 ] 2>/dev/null; then
+                echo "  $F ICON TOO SMALL (${W}x${H})! Must be at least 512x512."
+                echo "     WHY: macOS needs 512x512@2x (1024x1024) for Retina displays."
+                echo "          A ${W}x${H} source upscaled to 1024x1024 looks terrible"
+                echo "          and iconutil may reject it."
+                echo "     FIX: Replace assets/icon.png with a 512x512 or 1024x1024 PNG."
+            else
+                echo "  $P Icon size OK for .icns creation"
+            fi
+        fi
     else
         echo "  $W $f missing from assets/"
     fi
