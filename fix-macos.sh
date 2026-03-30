@@ -37,7 +37,7 @@ else
 fi
 
 echo ""
-echo "=== Fix 3: App icon ==="
+echo "=== Fix 3: App icon (using correct iconset filenames) ==="
 
 APP_NAME=""
 [ -f "$HOME/.cowork-branding.json" ] && APP_NAME=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)

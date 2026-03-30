@@ -332,38 +332,42 @@ if [ -n "$BUILT_APP" ] && [ -d "$BUILT_APP" ]; then
 
     # -- Post-build icon fix: replace electron.icns with custom icon --
     APP_RESOURCES="/Applications/$APP_NAME.app/Contents/Resources"
-    CUSTOM_ICNS="$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns"
-    if [ -f "$CUSTOM_ICNS" ] && [ -s "$CUSTOM_ICNS" ]; then
-        # Replace electron.icns (what Info.plist points to by default)
-        [ -f "$APP_RESOURCES/electron.icns" ] && cp "$CUSTOM_ICNS" "$APP_RESOURCES/electron.icns"
-        cp "$CUSTOM_ICNS" "$APP_RESOURCES/icon.icns"
-        echo -e "${GREEN}*${NC} Custom icon applied to app bundle"
-    else
-        # Fallback: create .icns directly from icon.png
-        FALLBACK_PNG=""
-        for fp in "$BUILD_DIR/branding/icon.png" "$COWORK_REPO_DIR/assets/icon.png"; do
-            [ -f "$fp" ] && FALLBACK_PNG="$fp" && break
-        done
-        if [ -n "$FALLBACK_PNG" ]; then
-            TMPSET=$(mktemp -d)/AppIcon.iconset
-            mkdir -p "$TMPSET"
-            for sz in 16 32 64 128 256 512 1024; do
-                sips -z $sz $sz "$FALLBACK_PNG" --out "$TMPSET/icon_${sz}x${sz}.png" >/dev/null 2>&1
-            done
-            sips -z 32 32 "$FALLBACK_PNG" --out "$TMPSET/icon_16x16@2x.png" >/dev/null 2>&1
-            sips -z 64 64 "$FALLBACK_PNG" --out "$TMPSET/icon_32x32@2x.png" >/dev/null 2>&1
-            sips -z 256 256 "$FALLBACK_PNG" --out "$TMPSET/icon_128x128@2x.png" >/dev/null 2>&1
-            sips -z 512 512 "$FALLBACK_PNG" --out "$TMPSET/icon_256x256@2x.png" >/dev/null 2>&1
-            sips -z 1024 1024 "$FALLBACK_PNG" --out "$TMPSET/icon_512x512@2x.png" >/dev/null 2>&1
-            TMPICNS=$(mktemp).icns
-            if iconutil -c icns "$TMPSET" -o "$TMPICNS" 2>/dev/null && [ -s "$TMPICNS" ]; then
-                [ -f "$APP_RESOURCES/electron.icns" ] && cp "$TMPICNS" "$APP_RESOURCES/electron.icns"
-                cp "$TMPICNS" "$APP_RESOURCES/icon.icns"
-                echo -e "${GREEN}*${NC} Custom icon created and applied to app bundle"
-            fi
-            rm -rf "$(dirname "$TMPSET")" "$TMPICNS" 2>/dev/null
+    PLIST_ICON=$(defaults read "/Applications/$APP_NAME.app/Contents/Info.plist" CFBundleIconFile 2>/dev/null || echo "electron.icns")
+
+    # Find the source PNG
+    SRC_PNG=""
+    for fp in "$BUILD_DIR/branding/icon.png" "$COWORK_REPO_DIR/assets/icon.png"; do
+        [ -f "$fp" ] && SRC_PNG="$fp" && break
+    done
+
+    if [ -n "$SRC_PNG" ]; then
+        # Create .icns with ONLY valid iconset filenames (no 64x64 or 1024x1024)
+        ISET=$(mktemp -d)/App.iconset
+        mkdir -p "$ISET"
+        sips -z 16 16 "$SRC_PNG" --out "$ISET/icon_16x16.png" >/dev/null 2>&1
+        sips -z 32 32 "$SRC_PNG" --out "$ISET/icon_16x16@2x.png" >/dev/null 2>&1
+        sips -z 32 32 "$SRC_PNG" --out "$ISET/icon_32x32.png" >/dev/null 2>&1
+        sips -z 64 64 "$SRC_PNG" --out "$ISET/icon_32x32@2x.png" >/dev/null 2>&1
+        sips -z 128 128 "$SRC_PNG" --out "$ISET/icon_128x128.png" >/dev/null 2>&1
+        sips -z 256 256 "$SRC_PNG" --out "$ISET/icon_128x128@2x.png" >/dev/null 2>&1
+        sips -z 256 256 "$SRC_PNG" --out "$ISET/icon_256x256.png" >/dev/null 2>&1
+        sips -z 512 512 "$SRC_PNG" --out "$ISET/icon_256x256@2x.png" >/dev/null 2>&1
+        sips -z 512 512 "$SRC_PNG" --out "$ISET/icon_512x512.png" >/dev/null 2>&1
+        sips -z 1024 1024 "$SRC_PNG" --out "$ISET/icon_512x512@2x.png" >/dev/null 2>&1
+
+        RESULT_ICNS=$(mktemp).icns
+        if iconutil -c icns "$ISET" -o "$RESULT_ICNS" 2>&1 && [ -s "$RESULT_ICNS" ]; then
+            # Replace whatever Info.plist points to
+            cp "$RESULT_ICNS" "$APP_RESOURCES/$PLIST_ICON"
+            echo -e "${GREEN}*${NC} Custom icon applied ($PLIST_ICON replaced, $(ls -lh "$RESULT_ICNS" | awk '{print $5}'))"
+        else
+            echo -e "${YELLOW}!${NC} iconutil failed — using PNG fallback for app icon"
+            # At minimum copy the PNG so Electron's getIconPath() finds it
+            cp "$SRC_PNG" "$APP_RESOURCES/icon.png" 2>/dev/null
         fi
+        rm -rf "$(dirname "$ISET")" "$RESULT_ICNS" 2>/dev/null
     fi
+
     # Clear macOS icon cache
     sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
     killall Dock 2>/dev/null || true
