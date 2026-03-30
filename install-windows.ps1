@@ -64,13 +64,14 @@ $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DE
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
 
 Write-Host ""
-Write-Host "  Logo URLs (optional — press Enter to skip):" -ForegroundColor Gray
-$SMALL_LOGO_URL = Read-Host "  Small logo URL (favicon/icon, PNG or ICO)"
-$LARGE_LOGO_URL = Read-Host "  Large logo URL (landing page, PNG or WebP)"
-
 Write-Ok "Organization: $APP_NAME"
 Write-Ok "Provider: $PROVIDER_DISPLAY ($API_URL)"
 Write-Ok "Model: $DEFAULT_MODEL"
+# Check for local branding assets
+$ICON_ASSET = "$COWORK_REPO_DIR\assets\icon.png"
+$LOGO_ASSET = "$COWORK_REPO_DIR\assets\logo.png"
+if (Test-Path $ICON_ASSET) { Write-Ok "Icon: assets\icon.png" } else { Write-Host "  - No custom icon (assets\icon.png) — using defaults" -ForegroundColor Gray }
+if (Test-Path $LOGO_ASSET) { Write-Ok "Logo: assets\logo.png" } else { Write-Host "  - No custom logo (assets\logo.png) — using defaults" -ForegroundColor Gray }
 Write-Host ""
 
 # ── Step 2: Prerequisites ──────────────────────────────────
@@ -139,35 +140,21 @@ if (Test-Path $pkgPath) {
 $brandingJson = @{ appName = $APP_NAME; provider = $PROVIDER_DISPLAY } | ConvertTo-Json
 Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" $brandingJson
 
-# Download logos if provided
-if ($SMALL_LOGO_URL) {
-    Write-Host "  Downloading small logo..."
-    New-Item -ItemType Directory -Force -Path "$BUILD_DIR\branding" | Out-Null
-    try {
-        $ext = if ($SMALL_LOGO_URL -match '\.ico') { "ico" } else { "png" }
-        Invoke-WebRequest -Uri $SMALL_LOGO_URL -OutFile "$BUILD_DIR\branding\icon.$ext" -TimeoutSec 15
-        # Copy to standard locations
-        $iconDirs = @("$BUILD_DIR\packages\desktop\src-tauri\icons", "$BUILD_DIR\packages\web\public")
-        foreach ($dir in $iconDirs) {
-            if (Test-Path $dir) {
-                Copy-Item "$BUILD_DIR\branding\icon.$ext" "$dir\favicon.png" -Force -ErrorAction SilentlyContinue
-                Copy-Item "$BUILD_DIR\branding\icon.$ext" "$dir\icon.png" -Force -ErrorAction SilentlyContinue
-            }
+# Apply branding assets from the assets/ folder
+New-Item -ItemType Directory -Force -Path "$BUILD_DIR\branding" | Out-Null
+if (Test-Path $ICON_ASSET) {
+    Copy-Item $ICON_ASSET "$BUILD_DIR\branding\icon.png" -Force
+    foreach ($dir in @("$BUILD_DIR\packages\desktop\src-tauri\icons", "$BUILD_DIR\packages\web\public")) {
+        if (Test-Path $dir) {
+            Copy-Item $ICON_ASSET "$dir\favicon.png" -Force -ErrorAction SilentlyContinue
+            Copy-Item $ICON_ASSET "$dir\icon.png" -Force -ErrorAction SilentlyContinue
         }
-        Write-Ok "Small logo applied"
-    } catch {
-        Write-Warn "Could not download small logo — using default"
     }
+    Write-Ok "Custom icon applied"
 }
-
-if ($LARGE_LOGO_URL) {
-    Write-Host "  Downloading large logo..."
-    try {
-        $ext = if ($LARGE_LOGO_URL -match '\.webp') { "webp" } elseif ($LARGE_LOGO_URL -match '\.svg') { "svg" } else { "png" }
-        Invoke-WebRequest -Uri $LARGE_LOGO_URL -OutFile "$BUILD_DIR\packages\web\public\logo.$ext" -TimeoutSec 15
-        Write-Ok "Large logo applied"
-    } catch {
-        Write-Warn "Could not download large logo — using default"
+if (Test-Path $LOGO_ASSET) {
+    Copy-Item $LOGO_ASSET "$BUILD_DIR\packages\web\public\logo.png" -Force -ErrorAction SilentlyContinue
+    Write-Ok "Custom logo applied"
     }
 }
 

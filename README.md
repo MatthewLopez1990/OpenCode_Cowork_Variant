@@ -31,6 +31,17 @@ git clone https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git
 cd OpenCode_Cowork_Variant
 ```
 
+### Step 1.5: Add your logos (optional)
+
+Drop your organization's logos into the `assets/` folder:
+
+| File | Purpose | Recommended Size |
+|------|---------|-----------------|
+| `assets/icon.png` | Favicon, desktop shortcut, top-left corner of the app | 512x512 PNG |
+| `assets/logo.png` | Landing page center logo | 800x200 or larger PNG |
+
+The installer automatically detects these files and applies them during build. No URL entry needed — just drop the files and run the installer. If not provided, the app uses default OpenChamber icons.
+
 ### Step 2: Customize your rules (optional but recommended)
 
 Edit `CLAUDE.md` in the repo root to add your organization's specific rules. This file gets injected into every project directory as a security policy. There's a `## Custom Rules` section at the bottom for your additions:
@@ -103,10 +114,9 @@ chmod +x install-linux.sh
 | **API key** | Authentication for your API | `sk-abc123...` |
 | **Default model ID** | The model identifier your API expects | `gpt-4o` |
 | **Default model display name** | Human-readable name in the UI | `GPT-4o` |
-| **Small logo URL** | Favicon, desktop icon, top-left corner (PNG/ICO) | `https://example.com/icon.png` |
-| **Large logo URL** | Landing page center logo (PNG/WebP) | `https://example.com/logo.png` |
 
-Logo URLs are optional — press Enter to skip and use defaults.
+
+Logos are loaded from the `assets/` folder — no URL entry needed (see Step 1.5 below).
 
 ### What the installer does
 

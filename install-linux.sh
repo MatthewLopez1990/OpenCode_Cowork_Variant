@@ -70,14 +70,13 @@ read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
 echo ""
-echo "Logo URLs (optional — press Enter to skip):"
-echo -ne "Small logo URL (favicon/icon): "
-read -r SMALL_LOGO_URL
-echo -ne "Large logo URL (landing page): "
-read -r LARGE_LOGO_URL
-
 echo -e "${GREEN}✓${NC} Organization: $APP_NAME"
 echo -e "${GREEN}✓${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
+echo -e "${GREEN}✓${NC} Model: $DEFAULT_MODEL"
+ICON_ASSET="$COWORK_REPO_DIR/assets/icon.png"
+LOGO_ASSET="$COWORK_REPO_DIR/assets/logo.png"
+[ -f "$ICON_ASSET" ] && echo -e "${GREEN}✓${NC} Icon: assets/icon.png" || echo -e "  - No custom icon — using defaults"
+[ -f "$LOGO_ASSET" ] && echo -e "${GREEN}✓${NC} Logo: assets/logo.png" || echo -e "  - No custom logo — using defaults"
 echo ""
 
 # Step 2: Prerequisites
@@ -135,12 +134,18 @@ fi
 
 echo "{\"appName\":\"$APP_NAME\",\"provider\":\"$PROVIDER_DISPLAY\"}" > "$HOME/.cowork-branding.json"
 
-if [ -n "$SMALL_LOGO_URL" ]; then
-    mkdir -p "$BUILD_DIR/branding"
-    curl -fsSL "$SMALL_LOGO_URL" -o "$BUILD_DIR/branding/icon.png" 2>/dev/null && echo -e "${GREEN}✓${NC} Small logo applied" || true
+# Apply branding assets from the assets/ folder
+mkdir -p "$BUILD_DIR/branding"
+if [ -f "$ICON_ASSET" ]; then
+    cp "$ICON_ASSET" "$BUILD_DIR/branding/icon.png"
+    for DIR in "$BUILD_DIR/packages/web/public" "$BUILD_DIR/packages/desktop/src-tauri/icons"; do
+        [ -d "$DIR" ] && cp "$ICON_ASSET" "$DIR/favicon.png" 2>/dev/null && cp "$ICON_ASSET" "$DIR/icon.png" 2>/dev/null
+    done
+    echo -e "${GREEN}✓${NC} Custom icon applied"
 fi
-if [ -n "$LARGE_LOGO_URL" ]; then
-    curl -fsSL "$LARGE_LOGO_URL" -o "$BUILD_DIR/packages/web/public/logo.png" 2>/dev/null && echo -e "${GREEN}✓${NC} Large logo applied" || true
+if [ -f "$LOGO_ASSET" ]; then
+    cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/logo.png" 2>/dev/null
+    echo -e "${GREEN}✓${NC} Custom logo applied"
 fi
 
 INDEX_HTML="$BUILD_DIR/packages/web/index.html"
