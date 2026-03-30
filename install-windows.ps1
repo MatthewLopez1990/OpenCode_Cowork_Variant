@@ -179,6 +179,11 @@ if (Test-Path $indexHtml) {
     Set-Content $indexHtml $html -Encoding UTF8
 }
 
+# Add Electron dependencies (upstream OpenChamber doesn't include them)
+Write-Host "  Adding Electron dependencies..."
+Set-Location $BUILD_DIR
+bun add electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | Select-Object -Last 1
+
 Write-Host "  Installing dependencies..."
 bun install 2>&1 | Select-Object -Last 1
 Write-Host "  Building branded frontend..."

@@ -143,6 +143,11 @@ fi
 INDEX_HTML="$BUILD_DIR/packages/web/index.html"
 [ -f "$INDEX_HTML" ] && sed -i '' "s|<title>[^<]*</title>|<title>$APP_NAME</title>|" "$INDEX_HTML" 2>/dev/null
 
+# Add Electron dependencies (upstream OpenChamber doesn't include them)
+echo -e "Adding Electron dependencies..."
+cd "$BUILD_DIR"
+bun add electron@latest electron-builder@latest electron-store@latest electron-context-menu@latest 2>&1 | tail -1
+
 echo -e "Installing dependencies..."
 bun install 2>&1 | tail -1
 echo -e "Building frontend..."
@@ -150,7 +155,7 @@ bun run build:web 2>&1 | tail -3
 echo -e "${GREEN}✓${NC} Frontend built"
 
 # Build native app
-echo -e "Packaging desktop app..."
+echo -e "Packaging desktop app (this may take a few minutes)..."
 bunx electron-builder --config electron-builder.json --mac 2>&1 | grep -E "(Bundling|building|signing|Finished|target=)" || true
 
 BUILT_APP=$(find "$BUILD_DIR/electron-dist" -name "*.app" -maxdepth 3 | head -1)
@@ -189,12 +194,13 @@ echo -ne "  Installing AI provider SDK..."
 echo -e " ${GREEN}✓${NC}"
 
 # Commands (legal + finance) — Anthropic plugins use SKILL.md in subdirectories
+mkdir -p "$OPENCODE_CONFIG_DIR/commands"
 for CMD_TYPE in legal finance; do
     CMDS_SRC="$COWORK_REPO_DIR/commands/$CMD_TYPE"
     if [ -d "$CMDS_SRC" ]; then
-        CMDS_DEST="$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE"
-        cp -r "$CMDS_SRC" "$OPENCODE_CONFIG_DIR/commands/" 2>/dev/null
-        SKILL_COUNT=$(find "$CMDS_DEST" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+        rm -rf "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE" 2>/dev/null
+        cp -r "$CMDS_SRC" "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE"
+        SKILL_COUNT=$(find "$OPENCODE_CONFIG_DIR/commands/$CMD_TYPE" -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
         echo -e "${GREEN}✓${NC} $SKILL_COUNT $CMD_TYPE skills installed"
     fi
 done
