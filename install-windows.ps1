@@ -43,7 +43,8 @@ while ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) {
     $PROVIDER_DISPLAY = Read-Host "  Provider display name (e.g., 'Acme AI')"
     if ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) { Write-Host "  Required." -ForegroundColor Red }
 }
-$PROVIDER_NAME = ($PROVIDER_DISPLAY.ToLower() -replace '[^a-z0-9]','-' -replace '-+','-').Trim('-')
+# Internal provider key — always 'expedient-ai' to match the React provider filter
+$PROVIDER_NAME = "expedient-ai"
 
 $API_URL = ""
 while ([string]::IsNullOrWhiteSpace($API_URL)) {
@@ -288,7 +289,6 @@ if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
     $content = $content -replace '__API_KEY__', $API_KEY
     $content = $content -replace '__API_URL__', $API_URL
-    $content = $content -replace '__PROVIDER_NAME__', $PROVIDER_NAME
     $content = $content -replace '__DISPLAY_NAME__', $PROVIDER_DISPLAY
     $content = $content -replace '__DEFAULT_MODEL__', $DEFAULT_MODEL
     $content = $content -replace '__DEFAULT_MODEL_DISPLAY__', $DEFAULT_MODEL_DISPLAY
@@ -304,7 +304,7 @@ if (Test-Path $MODELS_FILE) {
     try {
         $config = Get-Content "$OPENCODE_CONFIG_DIR\opencode.json" -Raw | ConvertFrom-Json
         $extra = Get-Content $MODELS_FILE -Raw | ConvertFrom-Json
-        $providerKey = $PROVIDER_NAME
+        $providerKey = "expedient-ai"
         if ($config.provider.PSObject.Properties[$providerKey]) {
             $extraModels = $extra.models.PSObject.Properties
             $added = 0
@@ -377,7 +377,7 @@ foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.con
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $settingsJson = @"
 {
-  "defaultModel": "${PROVIDER_NAME}:${DEFAULT_MODEL}",
+  "defaultModel": "expedient-ai:${DEFAULT_MODEL}",
   "projects": [
     {
       "id": "$PROJECT_UUID",

@@ -45,7 +45,8 @@ while [ -z "$PROVIDER_DISPLAY" ]; do
     read -r PROVIDER_DISPLAY
     [ -z "$PROVIDER_DISPLAY" ] && echo -e "${RED}Required.${NC}"
 done
-PROVIDER_NAME=$(echo "$PROVIDER_DISPLAY" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+# Internal provider key — always 'expedient-ai' to match the React provider filter
+PROVIDER_NAME="expedient-ai"
 
 API_URL=""
 while [ -z "$API_URL" ]; do
@@ -305,7 +306,7 @@ mkdir -p "$OPENCODE_CONFIG_DIR"
 
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
-    sed "s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__PROVIDER_NAME__|$PROVIDER_NAME|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    sed "s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
     # Also copy to build directory (OpenCode reads config from CWD)
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null
 fi
@@ -320,11 +321,10 @@ try:
         config = json.load(f)
     with open('$MODELS_FILE') as f:
         extra = json.load(f)
-    provider_key = '$PROVIDER_NAME'
+    provider_key = 'expedient-ai'
     if provider_key in config.get('provider', {}):
         models = extra.get('models', {})
-        for model_id, model_cfg in models.items():
-            config['provider'][provider_key]['models'][model_id] = model_cfg
+        config['provider'][provider_key]['models'].update(models)
         with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
             json.dump(config, f, indent=2)
         print(f'Added {len(models)} extra models from models.json')
@@ -388,7 +388,7 @@ for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
     python3 -c "
 import json
 settings = {
-    'defaultModel': '${PROVIDER_NAME}:${DEFAULT_MODEL}',
+    'defaultModel': 'expedient-ai:${DEFAULT_MODEL}',
     'projects': [
         {
             'id': '$PROJECT_UUID',
