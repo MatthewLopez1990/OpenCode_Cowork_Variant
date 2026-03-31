@@ -300,23 +300,31 @@ mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
 cp "$COWORK_REPO_DIR/CLAUDE.md" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null || true
 echo -e "${GREEN}*${NC} Default project: $DEFAULT_PROJECT"
 
-# Settings with project entry (REQUIRED for sessions to work)
+# Settings — MERGE with existing (don't destroy SF Steward settings)
 PROJECT_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 PROJECT_TS=$(python3 -c "import time; print(int(time.time()*1000))")
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
     mkdir -p "$DIR"
     python3 -c "
-import json
-settings = {
-    'defaultModel': 'expedient-ai:$DEFAULT_MODEL',
-    'projects': [{'id': '$PROJECT_UUID', 'path': '$DEFAULT_PROJECT', 'addedAt': $PROJECT_TS, 'lastOpenedAt': $PROJECT_TS}],
-    'activeProjectId': '$PROJECT_UUID'
-}
-with open('$DIR/settings.json', 'w') as f:
-    json.dump(settings, f, indent=2)
+import json, os
+path = '$DIR/settings.json'
+existing = {}
+if os.path.exists(path):
+    try:
+        existing = json.load(open(path))
+    except: pass
+existing['defaultModel'] = 'expedient-ai:$DEFAULT_MODEL'
+projects = existing.get('projects', [])
+new_path = '$DEFAULT_PROJECT'
+if not any(p.get('path') == new_path for p in projects):
+    projects.append({'id': '$PROJECT_UUID', 'path': new_path, 'addedAt': $PROJECT_TS, 'lastOpenedAt': $PROJECT_TS})
+existing['projects'] = projects
+existing['activeProjectId'] = '$PROJECT_UUID'
+with open(path, 'w') as f:
+    json.dump(existing, f, indent=2)
 "
 done
-echo -e "${GREEN}*${NC} Settings configured"
+echo -e "${GREEN}*${NC} Settings configured (merged with existing)"
 
 # Shell profile
 SHELL_PROFILE="$HOME/.zshrc"

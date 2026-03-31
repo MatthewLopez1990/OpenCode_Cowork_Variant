@@ -369,29 +369,45 @@ Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
 
 Write-Ok "Default project: $DEFAULT_PROJECT"
 
-# Settings — must include a project entry or the app can't create sessions
+# Settings — MERGE with existing (don't destroy SF Steward settings)
 $PROJECT_UUID = [guid]::NewGuid().ToString()
 $PROJECT_TS = [long]([datetime]::UtcNow - [datetime]'1970-01-01').TotalMilliseconds
-$PROJECT_PATH_JSON = ($DEFAULT_PROJECT -replace '\\', '\\')
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $settingsJson = @"
-{
-  "defaultModel": "expedient-ai:${DEFAULT_MODEL}",
-  "projects": [
-    {
-      "id": "$PROJECT_UUID",
-      "path": "$PROJECT_PATH_JSON",
-      "addedAt": $PROJECT_TS,
-      "lastOpenedAt": $PROJECT_TS
+    $settingsPath = "$dir\settings.json"
+    $existing = @{}
+    if (Test-Path $settingsPath) {
+        try { $existing = Get-Content $settingsPath -Raw | ConvertFrom-Json } catch {}
     }
-  ],
-  "activeProjectId": "$PROJECT_UUID"
+    # Merge: keep existing projects, add new one
+    $existingProjects = @()
+    if ($existing.PSObject -and $existing.PSObject.Properties['projects']) {
+        $existingProjects = @($existing.projects)
+    }
+    $newPath = $DEFAULT_PROJECT
+    $alreadyExists = $false
+    foreach ($p in $existingProjects) {
+        if ($p.path -eq $newPath) { $alreadyExists = $true; break }
+    }
+    if (-not $alreadyExists) {
+        $existingProjects += @{ id = $PROJECT_UUID; path = $newPath; addedAt = $PROJECT_TS; lastOpenedAt = $PROJECT_TS }
+    }
+    $merged = @{
+        defaultModel = "expedient-ai:${DEFAULT_MODEL}"
+        projects = $existingProjects
+        activeProjectId = $PROJECT_UUID
+    }
+    # Preserve other existing settings (theme, etc.)
+    if ($existing.PSObject) {
+        foreach ($prop in $existing.PSObject.Properties) {
+            if ($prop.Name -notin @('defaultModel','projects','activeProjectId')) {
+                $merged[$prop.Name] = $prop.Value
+            }
+        }
+    }
+    Write-Utf8NoBom $settingsPath ($merged | ConvertTo-Json -Depth 10)
 }
-"@
-    Write-Utf8NoBom "$dir\settings.json" $settingsJson
-}
-Write-Ok "Default project registered in settings"
+Write-Ok "Settings configured (merged with existing)"
 
 [System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $API_KEY, "User")
 $env:COWORK_API_KEY = $API_KEY
