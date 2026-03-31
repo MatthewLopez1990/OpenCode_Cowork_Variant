@@ -149,28 +149,44 @@ mkdir -p "$BUILD_DIR/branding"
 mkdir -p "$BUILD_DIR/packages/desktop/src-tauri/icons"
 
 if [ -n "$ICON_ASSET" ]; then
-    # Auto-resize to all required sizes
-    sips -z 512 512 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-512.png" 2>/dev/null
-    sips -z 256 256 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-256.png" 2>/dev/null
-    sips -z 180 180 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-180.png" 2>/dev/null
-    sips -z 32 32 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-32.png" 2>/dev/null
-    sips -z 16 16 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-16.png" 2>/dev/null
-    cp "$ICON_ASSET" "$BUILD_DIR/branding/icon.png"
+    # First: upscale to 1024x1024 if smaller (macOS needs up to 512x512@2x = 1024x1024)
+    ICON_W=$(sips -g pixelWidth "$ICON_ASSET" 2>/dev/null | awk '/pixelWidth/{print $2}')
+    if [ -n "$ICON_W" ] && [ "$ICON_W" -lt 512 ] 2>/dev/null; then
+        echo -e "${YELLOW}!${NC} Icon is ${ICON_W}px — upscaling to 1024x1024"
+        sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1
+    else
+        sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1
+    fi
+    MASTER="$BUILD_DIR/branding/icon-master.png"
+    [ ! -f "$MASTER" ] && MASTER="$ICON_ASSET"
 
-    # Create .icns for macOS (required by electron-builder)
+    # Generate all sizes from the master (always downscale from 1024)
+    sips -z 512 512 "$MASTER" --out "$BUILD_DIR/branding/icon-512.png" >/dev/null 2>&1
+    sips -z 256 256 "$MASTER" --out "$BUILD_DIR/branding/icon-256.png" >/dev/null 2>&1
+    sips -z 180 180 "$MASTER" --out "$BUILD_DIR/branding/icon-180.png" >/dev/null 2>&1
+    sips -z 32 32 "$MASTER" --out "$BUILD_DIR/branding/icon-32.png" >/dev/null 2>&1
+    sips -z 16 16 "$MASTER" --out "$BUILD_DIR/branding/icon-16.png" >/dev/null 2>&1
+    cp "$MASTER" "$BUILD_DIR/branding/icon.png"
+
+    # Create .icns for macOS — use ONLY valid iconset filenames
     ICONSET_DIR="$BUILD_DIR/branding/app.iconset"
     mkdir -p "$ICONSET_DIR"
-    sips -z 16 16 "$ICON_ASSET" --out "$ICONSET_DIR/icon_16x16.png" 2>/dev/null
-    sips -z 32 32 "$ICON_ASSET" --out "$ICONSET_DIR/icon_16x16@2x.png" 2>/dev/null
-    sips -z 32 32 "$ICON_ASSET" --out "$ICONSET_DIR/icon_32x32.png" 2>/dev/null
-    sips -z 64 64 "$ICON_ASSET" --out "$ICONSET_DIR/icon_32x32@2x.png" 2>/dev/null
-    sips -z 128 128 "$ICON_ASSET" --out "$ICONSET_DIR/icon_128x128.png" 2>/dev/null
-    sips -z 256 256 "$ICON_ASSET" --out "$ICONSET_DIR/icon_128x128@2x.png" 2>/dev/null
-    sips -z 256 256 "$ICON_ASSET" --out "$ICONSET_DIR/icon_256x256.png" 2>/dev/null
-    sips -z 512 512 "$ICON_ASSET" --out "$ICONSET_DIR/icon_256x256@2x.png" 2>/dev/null
-    sips -z 512 512 "$ICON_ASSET" --out "$ICONSET_DIR/icon_512x512.png" 2>/dev/null
-    sips -z 1024 1024 "$ICON_ASSET" --out "$ICONSET_DIR/icon_512x512@2x.png" 2>/dev/null
-    iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" 2>/dev/null || true
+    sips -z 16 16 "$MASTER" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null 2>&1
+    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null 2>&1
+    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null 2>&1
+    sips -z 64 64 "$MASTER" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null 2>&1
+    sips -z 128 128 "$MASTER" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null 2>&1
+    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1
+    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null 2>&1
+    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1
+    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_512x512.png" >/dev/null 2>&1
+    cp "$MASTER" "$ICONSET_DIR/icon_512x512@2x.png"
+    ICNS_RESULT=$(iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" 2>&1)
+    if [ -f "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" ]; then
+        echo -e "${GREEN}*${NC} .icns created ($(ls -lh "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" | awk '{print $5}'))"
+    else
+        echo -e "${YELLOW}!${NC} iconutil failed: $ICNS_RESULT"
+    fi
     rm -rf "$ICONSET_DIR"
 
     # Copy to all standard locations
@@ -180,9 +196,8 @@ if [ -n "$ICON_ASSET" ]; then
     cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon-32.png" 2>/dev/null
     cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/pwa-512.png" 2>/dev/null
     cp "$BUILD_DIR/branding/icon-180.png" "$BUILD_DIR/packages/web/public/apple-touch-icon.png" 2>/dev/null
-    # For electron-builder extraResources
     cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" 2>/dev/null
-    echo -e "${GREEN}*${NC} Custom icon applied (resized + .icns created)"
+    echo -e "${GREEN}*${NC} Custom icon applied"
 fi
 
 if [ -n "$LOGO_ASSET" ]; then

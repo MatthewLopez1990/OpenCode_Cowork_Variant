@@ -439,31 +439,89 @@ if provs: print(provs[0].get('id',''))
 
             # Step 2: Send a message
             echo "  Sending test message..."
-            MSG_RESP=$(curl -s -m 30 -X POST "http://localhost:$WEB_PORT/api/session/$SESS_ID/message" \
+            # Step 2: Send message and check HTTP status
+            echo "  Sending test message..."
+            MSG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST "http://localhost:$WEB_PORT/api/session/$SESS_ID/message" \
               -H "Content-Type: application/json" \
               -H "x-opencode-directory: $PROJECT_DIR" \
               -d "{\"parts\":[{\"type\":\"text\",\"text\":\"Say hi\"}],\"providerID\":\"$PROV_ID\",\"modelID\":\"$MODEL_ID\"}" 2>/dev/null)
-
-            if true; then
-                # HTTP status check — 200 with empty body is NORMAL (async via SSE)
-                MSG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X POST "http://localhost:$WEB_PORT/api/session/$SESS_ID/message" \
-                  -H "Content-Type: application/json" \
-                  -H "x-opencode-directory: $PROJECT_DIR" \
-                  -d "{\"parts\":[{\"type\":\"text\",\"text\":\"Say hello\"}],\"providerID\":\"$PROV_ID\",\"modelID\":\"$MODEL_ID\"}" 2>/dev/null)
-                if [ "$MSG_HTTP" = "200" ]; then
-                    echo "  $P Message accepted (HTTP 200 — response comes via SSE)"
-                elif [ "$MSG_HTTP" = "503" ] || [ "$MSG_HTTP" = "504" ]; then
-                    echo "  $F Message failed (HTTP $MSG_HTTP — OpenCode backend unavailable)"
-                    echo "     WHY: The Go backend may have crashed or timed out."
-                elif [ -n "$MSG_HTTP" ]; then
-                    echo "  $F Message failed (HTTP $MSG_HTTP)"
-                    echo "     Response: $(echo "$MSG_RESP" | head -c 200)"
-                else
-                    echo "  $F Message send failed (no HTTP response)"
-                    echo "     WHY: Could not connect to the server."
-                fi
+            if [ "$MSG_HTTP" = "200" ]; then
+                echo "  $P Message accepted (HTTP 200 — response comes via SSE)"
+            elif [ "$MSG_HTTP" = "503" ] || [ "$MSG_HTTP" = "504" ]; then
+                echo "  $F Message failed (HTTP $MSG_HTTP — OpenCode backend unavailable)"
+            elif [ -n "$MSG_HTTP" ]; then
+                echo "  $F Message failed (HTTP $MSG_HTTP)"
+            else
+                echo "  $F Message send failed (no HTTP response)"
             fi
+
+            # Step 3: Check SSE stream for actual AI response (wait up to 15s)
+            echo "  Checking SSE stream for AI response..."
+            SSE_DATA=$(curl -s -m 15 -N "http://localhost:$WEB_PORT/api/event?sessionID=$SESS_ID" \
+              -H "Accept: text/event-stream" \
+              -H "x-opencode-directory: $PROJECT_DIR" 2>/dev/null | head -c 2000)
+            if [ -n "$SSE_DATA" ]; then
+                EVENT_COUNT=$(echo "$SSE_DATA" | grep -c "^data:" 2>/dev/null | tr -d '[:space:]' || echo 0)
+                HAS_CONTENT=$(echo "$SSE_DATA" | grep -c "content\|assistant\|text" 2>/dev/null | tr -d '[:space:]' || echo 0)
+                HAS_ERROR=$(echo "$SSE_DATA" | grep -ci "error" 2>/dev/null | tr -d '[:space:]' || echo 0)
+                if [ "$HAS_ERROR" -gt 0 ]; then
+                    echo "  $F SSE stream contains errors:"
+                    echo "$SSE_DATA" | grep -i "error" | head -3 | while read line; do echo "    $line"; done
+                    echo "     WHY: The Go backend accepted the message but failed to call the API."
+                    echo "          This usually means the provider npm module can't be loaded or"
+                    echo "          the API endpoint rejected the request."
+                elif [ "$HAS_CONTENT" -gt 0 ]; then
+                    echo "  $P SSE stream has AI content ($EVENT_COUNT events)"
+                else
+                    echo "  $W SSE stream active but no AI content yet ($EVENT_COUNT events)"
+                fi
+            else
+                echo "  $F SSE stream returned nothing in 15 seconds"
+                echo "     WHY: The Go backend may have crashed after accepting the message,"
+                echo "          or the model provider (npm module) failed to initialize."
+                echo "          Check if @ai-sdk/openai-compatible is in the right location."
+            fi
+
+            # Step 4: Check session state after message
+            echo "  Checking session state..."
+            SESS_STATE=$(curl -s -m 5 "http://localhost:$WEB_PORT/api/session/$SESS_ID" \
+              -H "x-opencode-directory: $PROJECT_DIR" 2>/dev/null)
+            echo "$SESS_STATE" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    msgs = d.get('messages', [])
+    print(f'  Session has {len(msgs)} message(s)')
+    for m in msgs[-2:]:
+        role = m.get('role','?')
+        parts = m.get('parts', [])
+        txt = ''
+        for p in parts:
+            if isinstance(p, dict) and p.get('type') == 'text':
+                txt = p.get('text','')[:80]
+        if txt:
+            print(f'    {role}: {txt}')
+        else:
+            print(f'    {role}: (no text content)')
+except: pass
+" 2>/dev/null
         fi
+    fi
+
+    # --- OpenCode backend health ---
+    echo ""
+    echo "  --- OpenCode backend health ---"
+    OC_PORT=$(lsof -i -P 2>/dev/null | grep opencode | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+    if [ -n "$OC_PORT" ]; then
+        echo "  OpenCode port: $OC_PORT"
+        OC_HEALTH=$(curl -s -m 5 "http://localhost:$OC_PORT/global/health" 2>/dev/null)
+        if [ -n "$OC_HEALTH" ]; then
+            echo "  $P Backend healthy"
+        else
+            echo "  $F Backend not responding to health check"
+        fi
+    else
+        echo "  $F OpenCode process not listening on any port"
     fi
 fi
 echo ""
