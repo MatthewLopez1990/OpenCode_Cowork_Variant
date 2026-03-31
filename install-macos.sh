@@ -149,8 +149,23 @@ mkdir -p "$BUILD_DIR/branding"
 mkdir -p "$BUILD_DIR/packages/desktop/src-tauri/icons"
 
 if [ -n "$ICON_ASSET" ]; then
-    # Upscale to 1024x1024 master (works with any source size)
+    # Validate the icon first — sips can only process standard image formats
     ICON_W=$(sips -g pixelWidth "$ICON_ASSET" 2>/dev/null | awk '/pixelWidth/{print $2}')
+    if [ -z "$ICON_W" ] || echo "$ICON_W" | grep -qi "nil" 2>/dev/null; then
+        echo -e "${YELLOW}!${NC} Icon file cannot be read by sips — trying to convert..."
+        # Try python3 PIL conversion as fallback
+        python3 -c "
+from PIL import Image
+img = Image.open('$ICON_ASSET').convert('RGBA')
+img.save('$ICON_ASSET', 'PNG')
+print('Converted to standard PNG')
+" 2>/dev/null || python3 -c "
+# PIL not available — try macOS-native conversion
+import subprocess
+subprocess.run(['sips', '-s', 'format', 'png', '$ICON_ASSET', '--out', '$ICON_ASSET'], capture_output=True)
+" 2>/dev/null || echo -e "${YELLOW}!${NC} Could not convert icon — desktop icon may use default"
+        ICON_W=$(sips -g pixelWidth "$ICON_ASSET" 2>/dev/null | awk '/pixelWidth/{print $2}')
+    fi
     [ -n "$ICON_W" ] && [ "$ICON_W" -lt 512 ] 2>/dev/null && echo -e "${YELLOW}!${NC} Icon is ${ICON_W}px — upscaling to 1024x1024"
     sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1 || cp "$ICON_ASSET" "$BUILD_DIR/branding/icon-master.png"
     MASTER="$BUILD_DIR/branding/icon-master.png"

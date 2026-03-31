@@ -536,14 +536,17 @@ for f in icon.png logo.png; do
         H=$(sips -g pixelHeight "$ASSET" 2>/dev/null | awk '/pixelHeight/{print $2}')
         echo "  $f: $(ls -lh "$ASSET" | awk '{print $5}'), ${W}x${H}"
         if [ "$f" = "icon.png" ]; then
-            if [ -n "$W" ] && [ "$W" -lt 512 ] 2>/dev/null; then
-                echo "  $F ICON TOO SMALL (${W}x${H})! Must be at least 512x512."
-                echo "     WHY: macOS needs 512x512@2x (1024x1024) for Retina displays."
-                echo "          A ${W}x${H} source upscaled to 1024x1024 looks terrible"
-                echo "          and iconutil may reject it."
-                echo "     FIX: Replace assets/icon.png with a 512x512 or 1024x1024 PNG."
+            if [ -z "$W" ] || [ "$W" = "0" ] || echo "$W" | grep -qi "nil" 2>/dev/null; then
+                echo "  $F ICON FORMAT INVALID — sips cannot read dimensions"
+                echo "     WHY: The file may be a JPEG/WebP/SVG renamed to .png,"
+                echo "          or a corrupted PNG. macOS sips can only process"
+                echo "          standard PNG, JPEG, TIFF, and BMP files."
+                echo "     FIX: Open the file in Preview, Export as PNG, and replace it."
+                echo "     Actual format: $(file "$ASSET" 2>/dev/null | sed 's/.*: //')"
+            elif [ "$W" -lt 512 ] 2>/dev/null; then
+                echo "  $W ICON SMALL (${W}x${H}) — will be upscaled (may look blurry)"
             else
-                echo "  $P Icon size OK for .icns creation"
+                echo "  $P Icon size OK (${W}x${H})"
             fi
         fi
     else
