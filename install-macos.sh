@@ -149,59 +149,54 @@ mkdir -p "$BUILD_DIR/branding"
 mkdir -p "$BUILD_DIR/packages/desktop/src-tauri/icons"
 
 if [ -n "$ICON_ASSET" ]; then
-    # First: upscale to 1024x1024 if smaller (macOS needs up to 512x512@2x = 1024x1024)
+    # Upscale to 1024x1024 master (works with any source size)
     ICON_W=$(sips -g pixelWidth "$ICON_ASSET" 2>/dev/null | awk '/pixelWidth/{print $2}')
-    if [ -n "$ICON_W" ] && [ "$ICON_W" -lt 512 ] 2>/dev/null; then
-        echo -e "${YELLOW}!${NC} Icon is ${ICON_W}px — upscaling to 1024x1024"
-        sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1
-    else
-        sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1
-    fi
+    [ -n "$ICON_W" ] && [ "$ICON_W" -lt 512 ] 2>/dev/null && echo -e "${YELLOW}!${NC} Icon is ${ICON_W}px — upscaling to 1024x1024"
+    sips -z 1024 1024 "$ICON_ASSET" --out "$BUILD_DIR/branding/icon-master.png" >/dev/null 2>&1 || cp "$ICON_ASSET" "$BUILD_DIR/branding/icon-master.png"
     MASTER="$BUILD_DIR/branding/icon-master.png"
-    [ ! -f "$MASTER" ] && MASTER="$ICON_ASSET"
 
-    # Generate all sizes from the master (always downscale from 1024)
-    sips -z 512 512 "$MASTER" --out "$BUILD_DIR/branding/icon-512.png" >/dev/null 2>&1
-    sips -z 256 256 "$MASTER" --out "$BUILD_DIR/branding/icon-256.png" >/dev/null 2>&1
-    sips -z 180 180 "$MASTER" --out "$BUILD_DIR/branding/icon-180.png" >/dev/null 2>&1
-    sips -z 32 32 "$MASTER" --out "$BUILD_DIR/branding/icon-32.png" >/dev/null 2>&1
-    sips -z 16 16 "$MASTER" --out "$BUILD_DIR/branding/icon-16.png" >/dev/null 2>&1
-    cp "$MASTER" "$BUILD_DIR/branding/icon.png"
+    # Generate all sizes from master
+    sips -z 512 512 "$MASTER" --out "$BUILD_DIR/branding/icon-512.png" >/dev/null 2>&1 || true
+    sips -z 256 256 "$MASTER" --out "$BUILD_DIR/branding/icon-256.png" >/dev/null 2>&1 || true
+    sips -z 180 180 "$MASTER" --out "$BUILD_DIR/branding/icon-180.png" >/dev/null 2>&1 || true
+    sips -z 32 32 "$MASTER" --out "$BUILD_DIR/branding/icon-32.png" >/dev/null 2>&1 || true
+    sips -z 16 16 "$MASTER" --out "$BUILD_DIR/branding/icon-16.png" >/dev/null 2>&1 || true
+    cp "$MASTER" "$BUILD_DIR/branding/icon.png" 2>/dev/null || true
 
-    # Create .icns for macOS — use ONLY valid iconset filenames
+    # Create .icns for macOS
     ICONSET_DIR="$BUILD_DIR/branding/app.iconset"
     mkdir -p "$ICONSET_DIR"
-    sips -z 16 16 "$MASTER" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null 2>&1
-    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null 2>&1
-    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null 2>&1
-    sips -z 64 64 "$MASTER" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null 2>&1
-    sips -z 128 128 "$MASTER" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null 2>&1
-    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1
-    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null 2>&1
-    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1
-    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_512x512.png" >/dev/null 2>&1
-    cp "$MASTER" "$ICONSET_DIR/icon_512x512@2x.png"
-    ICNS_RESULT=$(iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" 2>&1)
+    sips -z 16 16 "$MASTER" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null 2>&1 || true
+    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null 2>&1 || true
+    sips -z 32 32 "$MASTER" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null 2>&1 || true
+    sips -z 64 64 "$MASTER" --out "$ICONSET_DIR/icon_32x32@2x.png" >/dev/null 2>&1 || true
+    sips -z 128 128 "$MASTER" --out "$ICONSET_DIR/icon_128x128.png" >/dev/null 2>&1 || true
+    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_128x128@2x.png" >/dev/null 2>&1 || true
+    sips -z 256 256 "$MASTER" --out "$ICONSET_DIR/icon_256x256.png" >/dev/null 2>&1 || true
+    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_256x256@2x.png" >/dev/null 2>&1 || true
+    sips -z 512 512 "$MASTER" --out "$ICONSET_DIR/icon_512x512.png" >/dev/null 2>&1 || true
+    cp "$MASTER" "$ICONSET_DIR/icon_512x512@2x.png" 2>/dev/null || true
+    iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" 2>/dev/null || true
     if [ -f "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" ]; then
         echo -e "${GREEN}*${NC} .icns created ($(ls -lh "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.icns" | awk '{print $5}'))"
     else
-        echo -e "${YELLOW}!${NC} iconutil failed: $ICNS_RESULT"
+        echo -e "${YELLOW}!${NC} .icns creation failed — will use PNG fallback"
     fi
     rm -rf "$ICONSET_DIR"
 
-    # Copy to all standard locations
-    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-16.png" "$BUILD_DIR/packages/web/public/favicon-16.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon-32.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/pwa-512.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-180.png" "$BUILD_DIR/packages/web/public/apple-touch-icon.png" 2>/dev/null
-    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" 2>/dev/null
+    # Copy to all standard locations (|| true prevents set -e crash)
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-16.png" "$BUILD_DIR/packages/web/public/favicon-16.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-32.png" "$BUILD_DIR/packages/web/public/favicon-32.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/pwa-512.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-180.png" "$BUILD_DIR/packages/web/public/apple-touch-icon.png" 2>/dev/null || true
+    cp "$BUILD_DIR/branding/icon-512.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" 2>/dev/null || true
     echo -e "${GREEN}*${NC} Custom icon applied"
 fi
 
 if [ -n "$LOGO_ASSET" ]; then
-    cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/cowork-logo.png" 2>/dev/null
+    cp "$LOGO_ASSET" "$BUILD_DIR/packages/web/public/cowork-logo.png" 2>/dev/null || true
     echo -e "${GREEN}*${NC} Custom logo applied"
 fi
 
@@ -261,7 +256,7 @@ with open('$BUILD_DIR/electron-builder.json', 'w') as f:
 echo -e "  Deploying sandbox rules..."
 SERVER_JS="$BUILD_DIR/packages/web/server/index.js"
 # ALWAYS copy the template (the server reads it at runtime)
-cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null
+cp "$COWORK_REPO_DIR/CLAUDE.md" "$BUILD_DIR/packages/web/server/CLAUDE_TEMPLATE.md" 2>/dev/null || true
 echo -e "${GREEN}✓${NC} CLAUDE_TEMPLATE.md deployed to server"
 
 # Only inject the JS function if it doesn't already exist (Cowork fork already has it)
@@ -356,31 +351,31 @@ if [ -n "$BUILT_APP" ] && [ -d "$BUILT_APP" ]; then
     done
 
     if [ -n "$SRC_PNG" ]; then
-        # Create .icns with ONLY valid iconset filenames (no 64x64 or 1024x1024)
+        # Upscale source to 1024 first, then create iconset from master
+        POST_MASTER=$(mktemp).png
+        sips -z 1024 1024 "$SRC_PNG" --out "$POST_MASTER" >/dev/null 2>&1 || cp "$SRC_PNG" "$POST_MASTER"
         ISET=$(mktemp -d)/App.iconset
         mkdir -p "$ISET"
-        sips -z 16 16 "$SRC_PNG" --out "$ISET/icon_16x16.png" >/dev/null 2>&1
-        sips -z 32 32 "$SRC_PNG" --out "$ISET/icon_16x16@2x.png" >/dev/null 2>&1
-        sips -z 32 32 "$SRC_PNG" --out "$ISET/icon_32x32.png" >/dev/null 2>&1
-        sips -z 64 64 "$SRC_PNG" --out "$ISET/icon_32x32@2x.png" >/dev/null 2>&1
-        sips -z 128 128 "$SRC_PNG" --out "$ISET/icon_128x128.png" >/dev/null 2>&1
-        sips -z 256 256 "$SRC_PNG" --out "$ISET/icon_128x128@2x.png" >/dev/null 2>&1
-        sips -z 256 256 "$SRC_PNG" --out "$ISET/icon_256x256.png" >/dev/null 2>&1
-        sips -z 512 512 "$SRC_PNG" --out "$ISET/icon_256x256@2x.png" >/dev/null 2>&1
-        sips -z 512 512 "$SRC_PNG" --out "$ISET/icon_512x512.png" >/dev/null 2>&1
-        sips -z 1024 1024 "$SRC_PNG" --out "$ISET/icon_512x512@2x.png" >/dev/null 2>&1
+        sips -z 16 16 "$POST_MASTER" --out "$ISET/icon_16x16.png" >/dev/null 2>&1 || true
+        sips -z 32 32 "$POST_MASTER" --out "$ISET/icon_16x16@2x.png" >/dev/null 2>&1 || true
+        sips -z 32 32 "$POST_MASTER" --out "$ISET/icon_32x32.png" >/dev/null 2>&1 || true
+        sips -z 64 64 "$POST_MASTER" --out "$ISET/icon_32x32@2x.png" >/dev/null 2>&1 || true
+        sips -z 128 128 "$POST_MASTER" --out "$ISET/icon_128x128.png" >/dev/null 2>&1 || true
+        sips -z 256 256 "$POST_MASTER" --out "$ISET/icon_128x128@2x.png" >/dev/null 2>&1 || true
+        sips -z 256 256 "$POST_MASTER" --out "$ISET/icon_256x256.png" >/dev/null 2>&1 || true
+        sips -z 512 512 "$POST_MASTER" --out "$ISET/icon_256x256@2x.png" >/dev/null 2>&1 || true
+        sips -z 512 512 "$POST_MASTER" --out "$ISET/icon_512x512.png" >/dev/null 2>&1 || true
+        cp "$POST_MASTER" "$ISET/icon_512x512@2x.png" 2>/dev/null || true
 
         RESULT_ICNS=$(mktemp).icns
-        if iconutil -c icns "$ISET" -o "$RESULT_ICNS" 2>&1 && [ -s "$RESULT_ICNS" ]; then
-            # Replace whatever Info.plist points to
-            cp "$RESULT_ICNS" "$APP_RESOURCES/$PLIST_ICON"
+        if iconutil -c icns "$ISET" -o "$RESULT_ICNS" 2>/dev/null && [ -s "$RESULT_ICNS" ]; then
+            cp "$RESULT_ICNS" "$APP_RESOURCES/$PLIST_ICON" 2>/dev/null || true
             echo -e "${GREEN}*${NC} Custom icon applied ($PLIST_ICON replaced, $(ls -lh "$RESULT_ICNS" | awk '{print $5}'))"
         else
             echo -e "${YELLOW}!${NC} iconutil failed — using PNG fallback for app icon"
-            # At minimum copy the PNG so Electron's getIconPath() finds it
-            cp "$SRC_PNG" "$APP_RESOURCES/icon.png" 2>/dev/null
+            cp "$SRC_PNG" "$APP_RESOURCES/icon.png" 2>/dev/null || true
         fi
-        rm -rf "$(dirname "$ISET")" "$RESULT_ICNS" 2>/dev/null
+        rm -rf "$(dirname "$ISET")" "$RESULT_ICNS" "$POST_MASTER" 2>/dev/null || true
     fi
 
     # Clear macOS icon cache
