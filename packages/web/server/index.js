@@ -1274,6 +1274,26 @@ try {
   }
 } catch {}
 
+// Cowork provider filter: read provider keys from opencode.json so only configured providers are shown
+const OPENCODE_CONFIG_PATHS = [
+  path.join(os.homedir(), '.config', 'opencode', 'opencode.json'),
+  path.join(process.cwd(), 'opencode.json'),
+];
+let coworkAllowedProviderIds = new Set();
+for (const configPath of OPENCODE_CONFIG_PATHS) {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && parsed.provider && typeof parsed.provider === 'object') {
+      for (const key of Object.keys(parsed.provider)) {
+        coworkAllowedProviderIds.add(key);
+      }
+    }
+    break; // use the first config found
+  } catch {}
+}
+
+
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 const CLOUDFLARE_MANAGED_REMOTE_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-managed-remote-tunnels.json');
 const CLOUDFLARE_LEGACY_NAMED_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-named-tunnels.json');
@@ -7048,6 +7068,40 @@ function setupProxy(app) {
       }
     }
   });
+
+  // Cowork: only expose providers defined in the user's opencode.json config
+  if (coworkAllowedProviderIds.size > 0) {
+    app.get('/api/config/providers', async (req, res) => {
+      try {
+        const upstreamPath = getUpstreamPathForRequest(req);
+        const targetUrl = buildOpenCodeUrl(upstreamPath, '');
+        const headers = collectForwardHeaders(req);
+
+        const upstreamResponse = await fetch(targetUrl, {
+          method: 'GET',
+          headers,
+          signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+        });
+
+        const data = await upstreamResponse.json();
+        const filteredProviders = (data.providers || []).filter(p => coworkAllowedProviderIds.has(p.id));
+        const filteredDefaults = {};
+        if (data.default) {
+          for (const key of Object.keys(data.default)) {
+            if (coworkAllowedProviderIds.has(key)) {
+              filteredDefaults[key] = data.default[key];
+            }
+          }
+        }
+
+        res.json({ providers: filteredProviders, default: filteredDefaults });
+      } catch (error) {
+        if (!res.headersSent) {
+          res.status(503).json({ error: 'Failed to load providers' });
+        }
+      }
+    });
+  }
 
   app.use('/api', async (req, res, next) => {
     if (isSseApiPath(req.path)) {
