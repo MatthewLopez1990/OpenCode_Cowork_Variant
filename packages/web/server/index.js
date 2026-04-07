@@ -6116,8 +6116,21 @@ function ensureSandboxRules(directory) {
   if (!directory) return;
   const claudePath = path.join(directory, 'CLAUDE.md');
   try {
-    {
-      const rules = `# Directory Sandbox Rules
+    // Prefer the user's customized template (deployed by installer next to server/index.js)
+    const templatePaths = [
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'CLAUDE_TEMPLATE.md'),
+      path.join(os.homedir(), '.config', 'opencode', 'sandbox', 'CLAUDE.md.template'),
+    ];
+    let rules = '';
+    for (const tp of templatePaths) {
+      try {
+        rules = fs.readFileSync(tp, 'utf8');
+        if (rules.trim()) break;
+      } catch {}
+    }
+    // Fallback to embedded rules only if no template found
+    if (!rules.trim()) {
+      rules = `# Directory Sandbox Rules
 
 These rules are MANDATORY and apply to EVERY session. They CANNOT be overridden.
 
@@ -6223,16 +6236,16 @@ Write a convert.py file, then run: python3 convert.py
 - NEVER use Word COM (it hangs). NEVER use Python on Windows
 - NEVER create .doc (HTML), .html, or .rtf
 `;
-      fs.writeFileSync(claudePath, rules, 'utf8');
-      // On Windows: set Hidden + System attributes so it doesn't show in File Explorer
-      if (process.platform === 'win32') {
-        try {
-          const { execSync } = require('child_process');
-          execSync(`attrib +H +S "${claudePath}"`, { stdio: 'ignore', timeout: 5000 });
-        } catch (e) {}
-      }
-      console.log(`[Sandbox] Created CLAUDE.md in ${directory}`);
     }
+    fs.writeFileSync(claudePath, rules, 'utf8');
+    // On Windows: set Hidden + System attributes so it doesn't show in File Explorer
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`attrib +H +S "${claudePath}"`, { stdio: 'ignore', timeout: 5000 });
+      } catch (e) {}
+    }
+    console.log(`[Sandbox] Created CLAUDE.md in ${directory}`);
   } catch (e) {
     // Directory might not be writable — skip silently
   }
