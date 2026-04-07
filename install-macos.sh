@@ -3,8 +3,8 @@ set -e
 
 # ============================================================
 #  OpenCode Cowork — macOS Installer
-#  White-label AI assistant built on the proven SF Steward base.
-#  Minimal modifications to working code = reliable installs.
+#  White-label AI assistant for any enterprise.
+#  Installer handles branding, building, and configuration.
 # ============================================================
 
 BLUE='\033[0;34m'
@@ -228,9 +228,10 @@ if [ -n "$BUILT_APP" ] && [ -d "$BUILT_APP" ]; then
     cp -R "$BUILT_APP" "/Applications/$APP_NAME.app"
     echo -e "${GREEN}*${NC} $APP_NAME.app installed to /Applications"
 
-    # Clear icon cache
+    # Clear icon cache and Electron app data (stale Zustand state)
     sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
     killall Dock 2>/dev/null || true
+    rm -rf "$HOME/Library/Application Support/$APP_NAME" 2>/dev/null || true
 else
     echo -e "${YELLOW}!${NC} Desktop app build skipped — use browser mode"
 fi
@@ -300,7 +301,7 @@ mkdir -p "$OPENCODE_CONFIG_DIR/sandbox"
 cp "$COWORK_REPO_DIR/CLAUDE.md" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null || true
 echo -e "${GREEN}*${NC} Default project: $DEFAULT_PROJECT"
 
-# Settings — MERGE with existing (don't destroy SF Steward settings)
+# Settings — MERGE with existing (don't destroy other app settings)
 PROJECT_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 PROJECT_TS=$(python3 -c "import time; print(int(time.time()*1000))")
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do

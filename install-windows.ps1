@@ -370,7 +370,7 @@ Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
 
 Write-Ok "Default project: $DEFAULT_PROJECT"
 
-# Settings — MERGE with existing (don't destroy SF Steward settings)
+# Settings — MERGE with existing (don't destroy other app settings)
 $PROJECT_UUID = [guid]::NewGuid().ToString()
 $PROJECT_TS = [long]([datetime]::UtcNow - [datetime]'1970-01-01').TotalMilliseconds
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
@@ -409,6 +409,10 @@ foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.con
     Write-Utf8NoBom $settingsPath ($merged | ConvertTo-Json -Depth 10)
 }
 Write-Ok "Settings configured (merged with existing)"
+
+# Clear Electron app data (stale Zustand state from previous installs)
+$electronCache = "$env:APPDATA\$APP_NAME"
+if (Test-Path $electronCache) { Remove-Item -Recurse -Force $electronCache -ErrorAction SilentlyContinue }
 
 [System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $API_KEY, "User")
 $env:COWORK_API_KEY = $API_KEY

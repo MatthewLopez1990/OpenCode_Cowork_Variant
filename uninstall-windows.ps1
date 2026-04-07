@@ -145,6 +145,10 @@ Remove-Item "$env:USERPROFILE\.cowork-branding.json" -Force -ErrorAction Silentl
 # Remove any .opencode.json in home
 Remove-Item "$env:USERPROFILE\.opencode.json" -Force -ErrorAction SilentlyContinue
 
+# Clear Electron app data
+$electronCache = "$env:APPDATA\$APP_NAME"
+if (Test-Path $electronCache) { Remove-Item -Recurse -Force $electronCache -ErrorAction SilentlyContinue; Write-Ok "Cleared app cache" }
+
 # Step 7: Remove environment variable
 Write-Host "Step 7: Removing environment variable..." -ForegroundColor White
 if ([System.Environment]::GetEnvironmentVariable("COWORK_API_KEY", "User")) {

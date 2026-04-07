@@ -80,10 +80,11 @@ done
 rm -f "$HOME/.cowork-branding.json" 2>/dev/null
 rm -f "$HOME/.opencode.json" 2>/dev/null
 
-# Clear macOS icon cache
+# Clear Electron app data and macOS icon cache
+rm -rf "$HOME/Library/Application Support/$APP_NAME" 2>/dev/null || true
 sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
 killall Dock 2>/dev/null || true
-echo -e "${GREEN}✓${NC} Icon cache cleared"
+echo -e "${GREEN}✓${NC} App cache and icon cache cleared"
 
 # Step 6: Remove API key from shell profile
 echo -e "Step 6: Cleaning shell profile..."

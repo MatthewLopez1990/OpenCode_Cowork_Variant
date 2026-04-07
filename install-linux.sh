@@ -250,9 +250,9 @@ echo -e "${GREEN}*${NC} Frontend built"
 
 # Build Electron
 echo -e "  Packaging desktop app..."
+# Ensure icon files exist for electron-builder extraResources
 [ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && [ -f "$BUILD_DIR/branding/icon.png" ] && cp "$BUILD_DIR/branding/icon.png" "$BUILD_DIR/packages/web/public/cowork-icon.png"
-[ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && touch "$BUILD_DIR/packages/web/public/cowork-icon.png"
-[ ! -f "$BUILD_DIR/branding/icon.png" ] && touch "$BUILD_DIR/branding/icon.png"
+[ ! -f "$BUILD_DIR/packages/web/public/cowork-icon.png" ] && [ -f "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.png" ] && cp "$BUILD_DIR/packages/desktop/src-tauri/icons/icon.png" "$BUILD_DIR/packages/web/public/cowork-icon.png" || true
 bunx electron-builder --config electron-builder.json --linux AppImage 2>&1 | grep -E "(packaging|building|target=)" || true
 
 APPIMAGE=$(find "$BUILD_DIR/electron-dist" -name "*.AppImage" 2>/dev/null | head -1)
@@ -380,7 +380,7 @@ cp "$CLAUDE_SRC" "$OPENCODE_CONFIG_DIR/sandbox/CLAUDE.md.template" 2>/dev/null
 
 echo -e "${GREEN}*${NC} Default project: $DEFAULT_PROJECT"
 
-# Settings — MERGE with existing (don't destroy SF Steward settings)
+# Settings — MERGE with existing (don't destroy other app settings)
 PROJECT_UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
 PROJECT_TS=$(python3 -c "import time; print(int(time.time()*1000))")
 for DIR in "$HOME/.config/sf-steward" "$HOME/.config/openchamber"; do
@@ -415,6 +415,9 @@ if [ -f "$SHELL_PROFILE" ]; then
     [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_PROFILE"
     [[ ":$PATH:" != *":$HOME/.bun/bin:"* ]] && echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$SHELL_PROFILE"
 fi
+
+# Clear Electron app data (stale Zustand state from previous installs)
+rm -rf "$HOME/.config/$APP_NAME" 2>/dev/null || true
 
 echo ""
 echo -e "${BLUE}${BOLD}+==========================================+${NC}"

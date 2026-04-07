@@ -78,6 +78,9 @@ done
 rm -f "$HOME/.cowork-branding.json" 2>/dev/null
 rm -f "$HOME/.opencode.json" 2>/dev/null
 
+# Clear Electron app data
+rm -rf "$HOME/.config/$APP_NAME" 2>/dev/null || true
+
 # Step 6: Clean shell profile
 echo -e "Step 6: Cleaning shell profile..."
 SHELL_PROFILE="$HOME/.bashrc"
