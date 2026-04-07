@@ -117,6 +117,8 @@ function getIconPath() {
   for (const dir of buildDirs) {
     locations.push(path.join(dir, 'branding', 'icon.ico'));
     locations.push(path.join(dir, 'branding', 'icon.png'));
+    locations.push(path.join(dir, 'assets', 'icon.png'));
+    locations.push(path.join(dir, 'packages', 'web', 'public', 'cowork-icon.png'));
     locations.push(path.join(dir, 'packages', 'web', 'public', 'favicon.png'));
   }
 

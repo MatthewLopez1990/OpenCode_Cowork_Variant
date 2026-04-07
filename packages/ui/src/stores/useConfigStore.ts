@@ -710,9 +710,7 @@ export const useConfigStore = create<ConfigStore>()(
                             const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
                             const defaults = apiResult?.default || {};
 
-                            const processedProviders: ProviderWithModelList[] = providers
-                                .filter((provider) => provider.id === 'expedient-ai')
-                                .map((provider) => {
+                            const processedProviders: ProviderWithModelList[] = providers.map((provider) => {
                                 const modelRecord = provider.models ?? {};
                                 const models: ProviderModel[] = Object.keys(modelRecord).map((modelId) => modelRecord[modelId]);
                                 return {

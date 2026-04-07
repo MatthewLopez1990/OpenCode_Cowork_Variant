@@ -345,6 +345,32 @@ The diagnostic checks 12 components and explains WHY each failure occurs with ex
 | Default Electron icon | Icon < 512x512 or iconutil failed | Provide 512x512+ PNG |
 | No agents in dropdown | Plugin not loaded yet | Close and reopen app |
 
+## Development Rules
+
+If you modify the source code, these rules are critical:
+
+### 1. NEVER remove `content-encoding` from `hopByHopResponseHeaders`
+
+**File:** `packages/web/server/index.js`
+
+Bun's `fetch()` auto-decompresses gzip responses from the OpenCode binary. If the proxy forwards `Content-Encoding: gzip` to the browser, it tries to gunzip already-decompressed data, silently breaking every proxied API call. The symptom is "No models found" / "No agents found" even though the API returns HTTP 200.
+
+### 2. Provider filter belongs in the server, NOT the frontend store
+
+Do not add `.filter()` calls in `useConfigStore.ts` `loadProviders()`. If you need to filter providers, add a dedicated `app.get('/api/config/providers', ...)` route in `server/index.js`.
+
+### 3. `defaultModel` format uses `/` not `:`
+
+Settings files must use `provider-key/model-id` (e.g., `acme-ai/gpt-4o`), not `provider-key:model-id`.
+
+### 4. Settings MUST include `projects` array with `activeProjectId`
+
+Without a project entry, the UI can't determine the working directory and won't load providers or agents.
+
+### 5. Install scripts must clear Electron cache on reinstall
+
+Zustand's `persist` middleware caches store state. Stale empty providers persist across reinstalls. Clear the Electron app data directory during install.
+
 ## License
 
 MIT — Based on [OpenChamber](https://github.com/openchamber/openchamber) and [OpenCode](https://github.com/opencode-ai/opencode). Legal and finance plugins from [Anthropic](https://github.com/anthropics/knowledge-work-plugins).

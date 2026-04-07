@@ -43,8 +43,8 @@ while ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) {
     $PROVIDER_DISPLAY = Read-Host "  Provider display name (e.g., 'Acme AI')"
     if ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) { Write-Host "  Required." -ForegroundColor Red }
 }
-# Internal provider key — always 'expedient-ai' to match the React provider filter
-$PROVIDER_NAME = "expedient-ai"
+# Generate provider key from display name (lowercase, hyphens, no special chars)
+$PROVIDER_NAME = ($PROVIDER_DISPLAY.ToLower() -replace '[^a-z0-9]', '-' -replace '-+', '-').Trim('-')
 
 $API_URL = ""
 while ([string]::IsNullOrWhiteSpace($API_URL)) {
@@ -287,6 +287,7 @@ New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 $TEMPLATE = "$COWORK_REPO_DIR\config\opencode.json.template"
 if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
+    $content = $content -replace '__PROVIDER_KEY__', $PROVIDER_NAME
     $content = $content -replace '__API_KEY__', $API_KEY
     $content = $content -replace '__API_URL__', $API_URL
     $content = $content -replace '__DISPLAY_NAME__', $PROVIDER_DISPLAY
@@ -304,7 +305,7 @@ if (Test-Path $MODELS_FILE) {
     try {
         $config = Get-Content "$OPENCODE_CONFIG_DIR\opencode.json" -Raw | ConvertFrom-Json
         $extra = Get-Content $MODELS_FILE -Raw | ConvertFrom-Json
-        $providerKey = "expedient-ai"
+        $providerKey = $PROVIDER_NAME
         if ($config.provider.PSObject.Properties[$providerKey]) {
             $extraModels = $extra.models.PSObject.Properties
             $added = 0
@@ -393,7 +394,7 @@ foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.con
         $existingProjects += @{ id = $PROJECT_UUID; path = $newPath; addedAt = $PROJECT_TS; lastOpenedAt = $PROJECT_TS }
     }
     $merged = @{
-        defaultModel = "expedient-ai:${DEFAULT_MODEL}"
+        defaultModel = "${PROVIDER_NAME}/${DEFAULT_MODEL}"
         projects = $existingProjects
         activeProjectId = $PROJECT_UUID
     }

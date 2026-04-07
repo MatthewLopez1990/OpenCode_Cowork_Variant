@@ -1261,6 +1261,19 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
+
+// Cowork branding: read ~/.cowork-branding.json for custom app name and provider display name
+const COWORK_BRANDING_FILE = path.join(os.homedir(), '.cowork-branding.json');
+let coworkBranding = { appName: '', provider: '' };
+try {
+  const raw = fs.readFileSync(COWORK_BRANDING_FILE, 'utf8');
+  const parsed = JSON.parse(raw);
+  if (parsed && typeof parsed === 'object') {
+    coworkBranding.appName = typeof parsed.appName === 'string' ? parsed.appName.trim() : '';
+    coworkBranding.provider = typeof parsed.provider === 'string' ? parsed.provider.trim() : '';
+  }
+} catch {}
+
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 const CLOUDFLARE_MANAGED_REMOTE_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-managed-remote-tunnels.json');
 const CLOUDFLARE_LEGACY_NAMED_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-named-tunnels.json');
@@ -1967,7 +1980,7 @@ const sanitizeProjects = (input) => {
   return result;
 };
 
-const DEFAULT_PWA_APP_NAME = 'OpenChamber - AI Coding Assistant';
+const DEFAULT_PWA_APP_NAME = coworkBranding.appName || 'OpenChamber - AI Coding Assistant';
 const PWA_APP_NAME_MAX_LENGTH = 64;
 
 const normalizePwaAppName = (value, fallback = '') => {
@@ -6904,6 +6917,7 @@ function setupProxy(app) {
   const hopByHopResponseHeaders = new Set([
     'connection',
     'content-length',
+    'content-encoding',
     'transfer-encoding',
     'keep-alive',
     'te',

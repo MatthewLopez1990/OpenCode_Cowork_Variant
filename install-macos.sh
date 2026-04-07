@@ -63,8 +63,8 @@ echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
 read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
-# Internal provider key — always 'expedient-ai' to match React filter
-PROVIDER_KEY="expedient-ai"
+# Generate provider key from display name (lowercase, hyphens, no special chars)
+PROVIDER_KEY=$(echo "$PROVIDER_DISPLAY" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
 
 echo ""
 echo -e "${GREEN}*${NC} App: $APP_NAME"
@@ -242,10 +242,10 @@ echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 mkdir -p "$OPENCODE_CONFIG_DIR"
 
-# Create config from template (provider key is always 'expedient-ai')
+# Create config from template
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
-    sed "s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    sed "s|__PROVIDER_KEY__|$PROVIDER_KEY|g; s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null || true
 fi
 
@@ -260,7 +260,7 @@ try:
     with open('$MODELS_FILE') as f:
         extra = json.load(f)
     models = extra.get('models', {})
-    config['provider']['expedient-ai']['models'].update(models)
+    config['provider']['$PROVIDER_KEY']['models'].update(models)
     with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
         json.dump(config, f, indent=2)
     cp_dst = '$BUILD_DIR/opencode.json'
@@ -313,7 +313,7 @@ if os.path.exists(path):
     try:
         existing = json.load(open(path))
     except: pass
-existing['defaultModel'] = 'expedient-ai:$DEFAULT_MODEL'
+existing['defaultModel'] = '$PROVIDER_KEY/$DEFAULT_MODEL'
 projects = existing.get('projects', [])
 new_path = '$DEFAULT_PROJECT'
 if not any(p.get('path') == new_path for p in projects):

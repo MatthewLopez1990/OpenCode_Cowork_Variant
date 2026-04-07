@@ -23,7 +23,7 @@
     }
   },
   "provider": {
-    "expedient-ai": {
+    "__PROVIDER_KEY__": {
       "name": "__DISPLAY_NAME__",
       "npm": "@ai-sdk/openai-compatible",
       "models": {
