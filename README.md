@@ -9,7 +9,7 @@ OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/opencha
 ### Features
 
 - **Custom branding** — your app name, logos, and provider name throughout the app
-- **Any OpenAI-compatible API** — works with OpenAI, Azure, Anthropic proxies, Ollama, Expedient, or any provider
+- **Any OpenAI-compatible API** — works with OpenAI, Azure, Anthropic proxies, Ollama, or any provider
 - **Official Anthropic plugins** — legal (9 skills) and finance (8 skills) from [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins)
 - **oh-my-opencode plugin** — enhanced model performance
 - **Directory sandbox** — AI restricted to the project directory (hidden, self-protected `CLAUDE.md`)
@@ -296,7 +296,7 @@ OpenCode_Cowork_Variant/
 │       └── audit-support/
 ├── config/
 │   ├── opencode.json.template    # API config template (uses placeholders)
-│   ├── models.json               # Extra Expedient models (auto-merged)
+│   ├── models.json               # Extra models (auto-merged during install)
 │   └── models.json.example       # Example for adding your own models
 ├── electron/
 │   └── main.cjs                  # Desktop app + sandbox injection

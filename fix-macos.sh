@@ -43,7 +43,7 @@ APP_NAME=""
 [ -f "$HOME/.cowork-branding.json" ] && APP_NAME=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)
 
 APP=""
-for candidate in "/Applications/${APP_NAME}.app" "/Applications/Expedient Cowork.app"; do
+for candidate in "/Applications/${APP_NAME}.app"; do
     [ -d "$candidate" ] && APP="$candidate" && break
 done
 

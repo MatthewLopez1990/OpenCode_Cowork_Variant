@@ -181,7 +181,7 @@ echo "=== 6. APP BUNDLE ==="
 BRAND_APP=""
 [ -f "$HOME/.cowork-branding.json" ] && BRAND_APP=$(python3 -c "import json; print(json.load(open('$HOME/.cowork-branding.json')).get('appName',''))" 2>/dev/null)
 APP=""
-for c in "/Applications/${BRAND_APP}.app" "/Applications/Expedient Cowork.app"; do
+for c in "/Applications/${BRAND_APP}.app"; do
     [ -d "$c" ] && APP="$c" && break
 done
 
@@ -275,7 +275,7 @@ echo ""
 
 # ============================================================
 echo "=== 10. RUNNING PROCESSES ==="
-PROCS=$(ps aux | grep -E "opencode|bun.*server|Expedient|Cowork" | grep -v grep)
+PROCS=$(ps aux | grep -E "opencode|bun.*server|opencode-cowork-build" | grep -v grep)
 if [ -z "$PROCS" ]; then
     echo "  $W No app processes running — start the app for full diagnostics"
 else
