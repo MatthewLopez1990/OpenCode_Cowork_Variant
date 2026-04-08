@@ -9,22 +9,22 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 
 const phrases = [
-    "Draft a legal memorandum",
-    "Research Missouri case law",
-    "Review this contract",
-    "Summarize the key holdings",
-    "Analyze privilege issues",
-    "Draft a motion to dismiss",
-    "Check statute of limitations",
-    "Outline the legal arguments",
-    "Compare these two provisions",
-    "Prepare deposition questions",
-    "Draft a client letter",
-    "Assess the legal risks",
-    "Format Bluebook citations",
-    "Create a litigation timeline",
-    "Review discovery requests",
-    "Explain this regulation",
+    "Summarize this document",
+    "Draft a professional email",
+    "Analyze this spreadsheet",
+    "Create a project timeline",
+    "Write a status report",
+    "Compare these two files",
+    "Outline the key takeaways",
+    "Review this proposal",
+    "Build a presentation outline",
+    "Explain this process",
+    "Generate a meeting agenda",
+    "Research this topic",
+    "Draft a policy document",
+    "Organize these notes",
+    "Create an executive summary",
+    "Help me brainstorm solutions",
 ];
 
 interface ChatEmptyStateProps {

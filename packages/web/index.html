@@ -445,7 +445,8 @@
       <!-- Loading fallback while React initializes -->
       <div id="initial-loading">
         <div style="display: flex; align-items: center; justify-content: center;">
-          <img src="/cowork-logo.png" alt="Loading" width="200" height="140" style="object-fit: contain;" class="logo-pulse" />
+          <img src="/cowork-logo.png" alt="" width="200" height="140" style="object-fit: contain;" class="logo-pulse"
+               onerror="this.style.display='none'" />
         </div>
       </div>
     </div>

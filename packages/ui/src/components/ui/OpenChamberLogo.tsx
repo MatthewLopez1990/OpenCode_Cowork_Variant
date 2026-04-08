@@ -25,7 +25,7 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
       `}</style>
       <img
         src="/cowork-logo.png"
-        alt="Loading"
+        alt=""
         width={width}
         height={height}
         className={className}
@@ -33,6 +33,7 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
           objectFit: 'contain',
           animation: isAnimated ? 'cowork-logo-pulse 3s ease-in-out infinite' : undefined,
         }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
       />
     </>
   );

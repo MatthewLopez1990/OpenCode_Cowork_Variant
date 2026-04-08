@@ -11,8 +11,8 @@ Place your organization's logos here before running the install script.
 
 ## Notes
 
-- **Any size works** — the installer automatically resizes the icon to 512x512, 256x256, 32x32, and 16x16
+- **Icon must be a real PNG** (512x512 or larger recommended). SVG/WebP files renamed to `.png` will fail silently.
 - The logo is used as-is (no resizing needed for the landing page)
-- Both files are **optional** — the app uses default icons if not provided
-- Supported format: **PNG** (recommended for both)
+- Both files are **optional** — the app works without them (no broken images)
+- Supported format: **PNG only** — open in Preview and Export as PNG if unsure
 - Just drop the files here and run the installer — no manual resizing needed
