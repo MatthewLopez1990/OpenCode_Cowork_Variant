@@ -54,6 +54,15 @@ const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
+// OpenCode's POST /session/{id}/message is synchronous — it doesn't return
+// until the entire model turn (thinking + tool calls + generation) is done.
+// A 4-minute cap kills hard coding tasks, producing "Network connection lost"
+// in the browser. 30 minutes is generous enough for any reasonable single
+// turn while still bounding genuine hangs. Override with env var if needed.
+const MESSAGE_REQUEST_TIMEOUT_MS = (() => {
+  const fromEnv = parseInt(process.env.OPENCHAMBER_MESSAGE_TIMEOUT_MS || '', 10);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 30 * 60 * 1000;
+})();
 const TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS = 30 * 60 * 1000;
 const TUNNEL_BOOTSTRAP_TTL_MIN_MS = 60 * 1000;
 const TUNNEL_BOOTSTRAP_TTL_MAX_MS = 24 * 60 * 60 * 1000;
@@ -7100,7 +7109,18 @@ function setupProxy(app) {
 
   // Dedicated forwarder for large session message payloads.
   // This avoids edge-cases in generic proxy streaming for multi-file attachments.
+  // Uses MESSAGE_REQUEST_TIMEOUT_MS (30 min default) instead of the 4-minute
+  // generic timeout because OpenCode's message endpoint blocks until the
+  // full model turn (thinking + tools + generation) finishes — hard tasks
+  // commonly exceed 4 minutes.
   app.post('/api/session/:sessionId/message', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+    // If the client disconnects, abort the upstream request too instead of
+    // letting it keep generating tokens that nobody will read.
+    const controller = new AbortController();
+    const onClientClose = () => controller.abort();
+    req.on('close', onClientClose);
+    const timeoutId = setTimeout(() => controller.abort(), MESSAGE_REQUEST_TIMEOUT_MS);
+
     try {
       const upstreamPath = getUpstreamPathForRequest(req);
       const targetUrl = buildOpenCodeUrl(upstreamPath, '');
@@ -7120,7 +7140,7 @@ function setupProxy(app) {
         method: 'POST',
         headers,
         body: bodyBuffer,
-        signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+        signal: controller.signal,
       });
 
       const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
@@ -7137,6 +7157,9 @@ function setupProxy(app) {
           error: isTimeout ? 'OpenCode message forward timed out' : 'OpenCode message forward failed',
         });
       }
+    } finally {
+      clearTimeout(timeoutId);
+      req.off('close', onClientClose);
     }
   });
 
@@ -7151,7 +7174,7 @@ function setupProxy(app) {
         const upstreamResponse = await fetch(targetUrl, {
           method: 'GET',
           headers,
-          signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+          signal: AbortSignal.timeout(15_000),
         });
 
         const data = await upstreamResponse.json();
