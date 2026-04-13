@@ -53,14 +53,16 @@ echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
 read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
-# OpenRouter is the only provider — hardcoded
-PROVIDER_KEY="openrouter"
-PROVIDER_DISPLAY="OpenRouter"
+# Backend is OpenRouter (hidden from the client). The provider is surfaced
+# in the UI using the APP_NAME so the end user sees the white-label brand,
+# not "OpenRouter". The provider key is a slug of the app name.
+PROVIDER_KEY=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+[ -z "$PROVIDER_KEY" ] && PROVIDER_KEY="provider"
 API_URL="https://openrouter.ai/api/v1"
 
 echo ""
 echo -e "${GREEN}*${NC} App: $APP_NAME"
-echo -e "${GREEN}*${NC} Provider: OpenRouter ($API_URL)"
+echo -e "${GREEN}*${NC} Provider (shown to users): $APP_NAME"
 echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
 # Check for branding assets
@@ -235,10 +237,12 @@ echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 mkdir -p "$OPENCODE_CONFIG_DIR"
 
-# Create config from template (OpenRouter is hardcoded in the template)
+# Create config from template. The OpenRouter baseURL is hardcoded in the
+# template itself; the provider key and display name come from the app name
+# so clients never see "OpenRouter" anywhere in the UI.
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
-    sed "s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    sed "s|__PROVIDER_KEY__|$PROVIDER_KEY|g; s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null || true
 fi
 

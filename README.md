@@ -118,7 +118,7 @@ chmod +x install-linux.sh
 | **Default model ID** | The OpenRouter model slug to load first | `anthropic/claude-sonnet-4.5` |
 | **Default model display name** | Human-readable name shown in the UI (optional) | `Claude 4.5 Sonnet` |
 
-That's it. No API URL prompt — OpenRouter's endpoint (`https://openrouter.ai/api/v1`) is wired in automatically. No provider name prompt — it's always "OpenRouter". Browse available model IDs at [openrouter.ai/models](https://openrouter.ai/models) before running the installer.
+That's it. No API URL prompt — OpenRouter's endpoint (`https://openrouter.ai/api/v1`) is wired in automatically. No provider name prompt — the **provider shown in the UI uses your app name**, so clients see "Acme AI Assistant" (or whatever you choose) as the provider, not "OpenRouter". The OpenRouter backend is fully white-labeled. Browse available model IDs at [openrouter.ai/models](https://openrouter.ai/models) before running the installer.
 
 Logos are loaded from the `assets/` folder automatically — see [Step 2](#step-2-add-your-branding-optional).
 

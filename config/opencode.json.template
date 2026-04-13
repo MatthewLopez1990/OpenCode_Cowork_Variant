@@ -3,28 +3,28 @@
   "plugin": [
     "oh-my-openagent@latest"
   ],
-  "model": "openrouter/__DEFAULT_MODEL__",
+  "model": "__PROVIDER_KEY__/__DEFAULT_MODEL__",
   "agent": {
     "plan": {
-      "model": "openrouter/__DEFAULT_MODEL__",
+      "model": "__PROVIDER_KEY__/__DEFAULT_MODEL__",
       "options": {}
     },
     "build": {
-      "model": "openrouter/__DEFAULT_MODEL__",
+      "model": "__PROVIDER_KEY__/__DEFAULT_MODEL__",
       "options": {}
     },
     "title": {
-      "model": "openrouter/__DEFAULT_MODEL__",
+      "model": "__PROVIDER_KEY__/__DEFAULT_MODEL__",
       "options": {}
     },
     "summary": {
-      "model": "openrouter/__DEFAULT_MODEL__",
+      "model": "__PROVIDER_KEY__/__DEFAULT_MODEL__",
       "options": {}
     }
   },
   "provider": {
-    "openrouter": {
-      "name": "OpenRouter",
+    "__PROVIDER_KEY__": {
+      "name": "__APP_NAME__",
       "npm": "@ai-sdk/openai-compatible",
       "models": {
         "__DEFAULT_MODEL__": {

@@ -54,14 +54,17 @@ while ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
 $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
 
-# OpenRouter is the only provider - hardcoded
-$PROVIDER_NAME = "openrouter"
-$PROVIDER_DISPLAY = "OpenRouter"
+# Backend is OpenRouter (hidden from the client). The provider is surfaced
+# in the UI using the APP_NAME so the end user sees the white-label brand,
+# not "OpenRouter". The provider key is a slug of the app name.
+$PROVIDER_NAME = ($APP_NAME.ToLower() -replace '[^a-z0-9]', '-' -replace '-+', '-').Trim('-')
+if ([string]::IsNullOrWhiteSpace($PROVIDER_NAME)) { $PROVIDER_NAME = "provider" }
+$PROVIDER_DISPLAY = $APP_NAME
 $API_URL = "https://openrouter.ai/api/v1"
 
 Write-Host ""
 Write-Ok "Organization: $APP_NAME"
-Write-Ok "Provider: $PROVIDER_DISPLAY ($API_URL)"
+Write-Ok "Provider (shown to users): $APP_NAME"
 Write-Ok "Model: $DEFAULT_MODEL"
 
 # Check for branding assets
@@ -283,6 +286,7 @@ New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 $TEMPLATE = "$COWORK_REPO_DIR\config\opencode.json.template"
 if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
+    $content = $content -replace '__PROVIDER_KEY__', $PROVIDER_NAME
     $content = $content -replace '__API_KEY__', $API_KEY
     $content = $content -replace '__APP_NAME__', $APP_NAME
     $content = $content -replace '__DEFAULT_MODEL__', $DEFAULT_MODEL

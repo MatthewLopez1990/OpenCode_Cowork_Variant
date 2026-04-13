@@ -57,14 +57,16 @@ echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
 read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
-# OpenRouter is the only provider — hardcoded
-PROVIDER_NAME="openrouter"
-PROVIDER_DISPLAY="OpenRouter"
+# Backend is OpenRouter (hidden from the client). The provider is surfaced
+# in the UI using the APP_NAME so the end user sees the white-label brand,
+# not "OpenRouter". The provider key is a slug of the app name.
+PROVIDER_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+[ -z "$PROVIDER_NAME" ] && PROVIDER_NAME="provider"
 API_URL="https://openrouter.ai/api/v1"
 
 echo ""
 echo -e "${GREEN}*${NC} Organization: $APP_NAME"
-echo -e "${GREEN}*${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
+echo -e "${GREEN}*${NC} Provider (shown to users): $APP_NAME"
 echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
 ICON_ASSET=""
@@ -299,7 +301,7 @@ mkdir -p "$OPENCODE_CONFIG_DIR"
 
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
-    sed "s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    sed "s|__PROVIDER_KEY__|$PROVIDER_NAME|g; s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
     # Also copy to build directory (OpenCode reads config from CWD)
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null
 fi
