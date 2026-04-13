@@ -419,7 +419,7 @@ Write-Host "  +==========================================+" -ForegroundColor Blu
 Write-Host ""
 Write-Host "  * $APP_NAME desktop app" -ForegroundColor Green
 Write-Host "  * AI models (default: $DEFAULT_MODEL)" -ForegroundColor Green
-Write-Host "  * oh-my-opencode plugin" -ForegroundColor Green
+Write-Host "  * oh-my-openagent plugin" -ForegroundColor Green
 Write-Host "  * Legal + Finance commands" -ForegroundColor Green
 Write-Host "  * Directory sandbox (hidden CLAUDE.md)" -ForegroundColor Green
 Write-Host ""

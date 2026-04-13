@@ -12,7 +12,7 @@ OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/opencha
 - **OpenRouter as the single backend** — one API key unlocks the full OpenRouter catalog (300+ models from Anthropic, OpenAI, Google, Meta, Mistral, etc.)
 - **Model management** — browse OpenRouter's catalog and load only the models you want; rename them to whatever you like
 - **Official Anthropic plugins** — legal (9 skills) and finance (8 skills) from [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins)
-- **oh-my-opencode plugin** — enhanced model performance
+- **oh-my-openagent plugin** — enhanced model performance and extra agents (Sisyphus, Hephaestus). Works best with **Claude models** (Opus/Sonnet); GPT and weaker open-source models may refuse the plugin's aggressive system prompts.
 - **Directory sandbox** — AI restricted to the project directory (hidden, self-protected `CLAUDE.md`)
 - **Word document creation** — PowerShell + .NET on Windows, Python stdlib (`zipfile`) on macOS/Linux — zero external packages
 - **Multi-platform** — Windows (x64 + ARM64), macOS (Intel + Apple Silicon), Linux
@@ -130,7 +130,7 @@ Logos are loaded from the `assets/` folder automatically — see [Step 2](#step-
 4. Sets the app name in the title bar, shortcuts, and Start Menu
 5. Configures your API provider with your URL, key, and default model
 6. Generates a provider key from your display name (e.g., "Acme AI" becomes `acme-ai`)
-7. Installs the **oh-my-opencode** plugin for enhanced model performance
+7. Installs the **oh-my-openagent** plugin for enhanced model performance
 8. Deploys **legal** and **finance** slash commands (official Anthropic plugins)
 9. Deploys your customized `CLAUDE.md` sandbox rules (hidden on Windows)
 10. Saves a template for auto-injection into future project directories

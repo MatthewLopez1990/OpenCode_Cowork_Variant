@@ -41,17 +41,17 @@ if [ -n "${UI_PASSWORD:-}" ]; then
   echo "[entrypoint] UI password set, enabling authentication"
 fi
 
-if [ "${OH_MY_OPENCODE:-false}" = "true" ]; then
-  OMO_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/oh-my-opencode.json"
+if [ "${OH_MY_OPENAGENT:-${OH_MY_OPENCODE:-false}}" = "true" ]; then
+  OMO_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/oh-my-openagent.json"
 
   if [ ! -f "${OMO_CONFIG_FILE}" ]; then
-    echo "[entrypoint] npm installing oh-my-opencode..."
-    npm install -g oh-my-opencode
+    echo "[entrypoint] npm installing oh-my-openagent..."
+    npm install -g oh-my-openagent
 
     OMO_INSTALL_ARGS="--no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no --kimi-for-coding=no --skip-auth"
 
-    echo "[entrypoint] oh-my-opencode installing..."
-    oh-my-opencode install ${OMO_INSTALL_ARGS}
+    echo "[entrypoint] oh-my-openagent installing..."
+    oh-my-openagent install ${OMO_INSTALL_ARGS}
   fi
 fi
 

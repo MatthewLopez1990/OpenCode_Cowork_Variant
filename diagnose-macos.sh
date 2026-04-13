@@ -138,7 +138,7 @@ if [ -d "$PLG" ]; then
     VER=$(python3 -c "import json; print(json.load(open('$PLG/package.json')).get('version','?'))" 2>/dev/null)
     echo "  $P @opencode-ai/plugin v$VER"
 else
-    echo "  $W @opencode-ai/plugin not installed (oh-my-opencode may not work)"
+    echo "  $W @opencode-ai/plugin not installed (oh-my-openagent may not work)"
 fi
 echo ""
 
@@ -333,7 +333,7 @@ try:
             print(f'    {a.get(\"name\",\"?\")}: model={a.get(\"model\",\"?\")}')
         if not visible:
             print(f'  $W No visible agents')
-            print(f'     WHY: oh-my-opencode plugin may not have loaded yet')
+            print(f'     WHY: oh-my-openagent plugin may not have loaded yet')
             print(f'     FIX: Close and reopen the app (plugin loads on startup)')
     else:
         print(f'  $W Unexpected response: {type(d).__name__}')
