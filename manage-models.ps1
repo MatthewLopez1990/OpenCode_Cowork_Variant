@@ -1,0 +1,214 @@
+# ============================================================
+#  OpenCode Cowork — Model Manager (Windows)
+#
+#  Discovers all models from your configured provider's API and
+#  lets you pick which ones to load into the app. Only loaded
+#  models appear in the chat selector.
+#
+#  Usage:  .\manage-models.ps1
+# ============================================================
+
+$ErrorActionPreference = "Stop"
+
+$CONFIG_FILE = "$env:USERPROFILE\.config\opencode\opencode.json"
+$BUILD_CONFIG = "$env:USERPROFILE\.opencode-cowork-build\opencode.json"
+
+if (-not (Test-Path $CONFIG_FILE)) {
+    Write-Host "Error: No config found at $CONFIG_FILE" -ForegroundColor Red
+    Write-Host "Run the installer first."
+    exit 1
+}
+
+# Write UTF-8 WITHOUT BOM (same helper as installer)
+function Write-Utf8NoBom($Path, $Content) {
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8)
+}
+
+# Load config
+$config = Get-Content $CONFIG_FILE -Raw | ConvertFrom-Json
+
+if (-not $config.provider -or $config.provider.PSObject.Properties.Count -eq 0) {
+    Write-Host "Error: No provider configured in opencode.json" -ForegroundColor Red
+    exit 1
+}
+
+# Use the first provider (Cowork variant has exactly one)
+$providerProp = $config.provider.PSObject.Properties | Select-Object -First 1
+$PROVIDER_KEY = $providerProp.Name
+$provider = $providerProp.Value
+$PROVIDER_NAME = if ($provider.name) { $provider.name } else { $PROVIDER_KEY }
+$BASE_URL = ($provider.options.baseURL -as [string]).TrimEnd('/')
+$API_KEY = $provider.options.apiKey
+
+$currentModels = @()
+if ($provider.models) {
+    $currentModels = @($provider.models.PSObject.Properties.Name)
+}
+
+Write-Host ""
+Write-Host "  +==========================================+" -ForegroundColor Blue
+Write-Host "  |       Model Manager - Cowork             |" -ForegroundColor Blue
+Write-Host "  +==========================================+" -ForegroundColor Blue
+Write-Host ""
+Write-Host "  Provider: $PROVIDER_NAME ($PROVIDER_KEY)"
+Write-Host "  API URL:  $BASE_URL"
+Write-Host ""
+Write-Host "  Fetching available models..."
+
+# Fetch from /models, fall back to /v1/models
+$modelsResponse = $null
+foreach ($path in @("/models", "/v1/models")) {
+    try {
+        $modelsResponse = Invoke-RestMethod -Uri "$BASE_URL$path" `
+            -Method Get `
+            -Headers @{ Authorization = "Bearer $API_KEY" } `
+            -ErrorAction Stop
+        break
+    } catch {
+        $modelsResponse = $null
+    }
+}
+
+if ($null -eq $modelsResponse) {
+    Write-Host "Error: Could not fetch models from the API." -ForegroundColor Red
+    Write-Host "  Tried: $BASE_URL/models and $BASE_URL/v1/models"
+    Write-Host "  Check that your API key is valid and the endpoint supports GET /models."
+    exit 1
+}
+
+# Extract model IDs from either {data: [...]} or raw array
+$rawModels = if ($modelsResponse.data) { $modelsResponse.data } else { $modelsResponse }
+$modelIds = @()
+foreach ($m in $rawModels) {
+    if ($m -is [string]) {
+        $modelIds += $m
+    } elseif ($m.id) {
+        $modelIds += $m.id
+    } elseif ($m.name) {
+        $modelIds += $m.name
+    }
+}
+$modelIds = $modelIds | Sort-Object -Unique
+
+if ($modelIds.Count -eq 0) {
+    Write-Host "Error: API returned no models (or unexpected format)." -ForegroundColor Red
+    exit 1
+}
+
+# Build state map: modelId -> 'on' or 'off'
+$state = @{}
+foreach ($mid in $modelIds) {
+    if ($currentModels -contains $mid) {
+        $state[$mid] = 'on'
+    } else {
+        $state[$mid] = 'off'
+    }
+}
+
+function Show-Menu {
+    param($ids, $state)
+    Write-Host ""
+    Write-Host "  Available models:" -ForegroundColor White
+    for ($i = 0; $i -lt $ids.Count; $i++) {
+        $num = $i + 1
+        $mid = $ids[$i]
+        if ($state[$mid] -eq 'on') {
+            Write-Host "    [" -NoNewline
+            Write-Host "*" -ForegroundColor Green -NoNewline
+            Write-Host "] $num) $mid"
+        } else {
+            Write-Host "    [ ] $num) $mid"
+        }
+    }
+    Write-Host ""
+    Write-Host "  Legend: [*] = loaded, [ ] = available" -ForegroundColor Yellow
+}
+
+# Interactive loop
+while ($true) {
+    Show-Menu -ids $modelIds -state $state
+    Write-Host ""
+    Write-Host "  Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all, 'n' to deselect all,"
+    $input = Read-Host "  or press Enter to save"
+
+    if ([string]::IsNullOrWhiteSpace($input)) { break }
+
+    if ($input -eq 'a' -or $input -eq 'A') {
+        foreach ($mid in $modelIds) { $state[$mid] = 'on' }
+        continue
+    }
+    if ($input -eq 'n' -or $input -eq 'N') {
+        foreach ($mid in $modelIds) { $state[$mid] = 'off' }
+        continue
+    }
+
+    $picks = $input -split ',' | ForEach-Object { $_.Trim() }
+    foreach ($p in $picks) {
+        if ($p -match '^\d+$') {
+            $idx = [int]$p - 1
+            if ($idx -ge 0 -and $idx -lt $modelIds.Count) {
+                $mid = $modelIds[$idx]
+                if ($state[$mid] -eq 'on') { $state[$mid] = 'off' } else { $state[$mid] = 'on' }
+            }
+        }
+    }
+}
+
+# Build selected list
+$selected = @()
+foreach ($mid in $modelIds) {
+    if ($state[$mid] -eq 'on') { $selected += $mid }
+}
+
+if ($selected.Count -eq 0) {
+    Write-Host "Warning: No models selected. At least one model must be loaded." -ForegroundColor Yellow
+    Write-Host "No changes saved."
+    exit 0
+}
+
+# Default template for new models
+function New-ModelEntry($id) {
+    return @{
+        name = $id
+        tool_call = $true
+        attachment = $true
+        modalities = @{ input = @("text", "image"); output = @("text") }
+        options = @{ temperature = 0.7; max_tokens = 16384 }
+    }
+}
+
+function Update-ConfigFile($path) {
+    if (-not (Test-Path $path)) { return }
+    $cfg = Get-Content $path -Raw | ConvertFrom-Json
+
+    if (-not $cfg.provider.$PROVIDER_KEY) { return }
+
+    $existing = $cfg.provider.$PROVIDER_KEY.models
+    $newModels = [ordered]@{}
+
+    foreach ($mid in $selected) {
+        if ($existing -and $existing.PSObject.Properties[$mid]) {
+            # Preserve existing config (temperature, max_tokens, custom name, etc.)
+            $newModels[$mid] = $existing.$mid
+        } else {
+            $newModels[$mid] = New-ModelEntry $mid
+        }
+    }
+
+    # Replace the models object
+    $cfg.provider.$PROVIDER_KEY | Add-Member -MemberType NoteProperty -Name 'models' -Value $newModels -Force
+
+    Write-Utf8NoBom $path ($cfg | ConvertTo-Json -Depth 10)
+}
+
+Update-ConfigFile $CONFIG_FILE
+Update-ConfigFile $BUILD_CONFIG
+
+Write-Host ""
+Write-Host "  * Configuration updated ($($selected.Count) model(s))." -ForegroundColor Green
+Write-Host ""
+Write-Host "  Restart the app for changes to take effect:" -ForegroundColor Yellow
+Write-Host "    1. Quit the app"
+Write-Host "    2. Relaunch from Start Menu or Desktop shortcut"
+Write-Host ""

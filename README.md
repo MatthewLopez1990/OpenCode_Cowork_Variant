@@ -227,6 +227,30 @@ Every project directory gets a `CLAUDE.md` file that instructs the AI to stay wi
 
 The AI writes a `.ps1` or `.py` conversion script as a file first, then executes it. This avoids shell escaping issues that corrupt inline scripts.
 
+## Managing Available Models
+
+By default, the installer loads the single model you entered during setup. To browse your provider's full catalog and add more models after install, use the model manager:
+
+**macOS / Linux:**
+```bash
+./manage-models.sh
+```
+
+**Windows:**
+```powershell
+.\manage-models.ps1
+```
+
+The script:
+1. Reads your current provider config from `~/.config/opencode/opencode.json`
+2. Calls your API's `/models` (or `/v1/models`) endpoint to fetch everything your provider exposes
+3. Shows an interactive list with `[*]` next to models already loaded
+4. You toggle models by number (`2,3,5`), select all (`a`), or clear (`n`)
+5. Press Enter to save — existing model customizations (temperature, max_tokens, etc.) are preserved
+6. Restart the app and the new models appear in the Providers page and chat selector
+
+You can run it any time to add or remove models. It's non-destructive — it only changes the models list under your provider, leaving API keys, plugin config, and everything else alone.
+
 ## Changing the API Provider After Installation
 
 Edit `~/.config/opencode/opencode.json` and update the `provider` section:
@@ -301,6 +325,8 @@ OpenCode_Cowork_Variant/
 ├── uninstall-macos.sh
 ├── uninstall-linux.sh
 ├── opencode.md                   # Agent rules
+├── manage-models.sh              # Browse + load models from API (macOS/Linux)
+├── manage-models.ps1             # Browse + load models from API (Windows)
 ├── diagnose-macos.sh             # Diagnostic script (12 checks + API tests)
 ├── fix-macos.sh                  # Quick-fix for existing installs
 ├── .gitignore
