@@ -2,11 +2,19 @@
 #  OpenCode Cowork — Model Manager (Windows)
 #
 #  Discovers all models from your configured provider's API and
-#  lets you pick which ones to load into the app. Only loaded
-#  models appear in the chat selector.
+#  lets you pick which ones to load into the app. Works with any
+#  OpenAI-compatible endpoint including Open WebUI, where custom
+#  workspace models (with tools stripped, etc.) appear alongside
+#  base models.
 #
-#  Usage:  .\manage-models.ps1
+#  Usage:
+#    .\manage-models.ps1          Normal mode
+#    .\manage-models.ps1 -Debug   Dump raw API response and exit
 # ============================================================
+
+param(
+    [switch]$Debug
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -58,12 +66,14 @@ Write-Host "  Fetching available models..."
 
 # Fetch from /models, fall back to /v1/models
 $modelsResponse = $null
+$triedPath = ""
 foreach ($path in @("/models", "/v1/models")) {
     try {
         $modelsResponse = Invoke-RestMethod -Uri "$BASE_URL$path" `
             -Method Get `
             -Headers @{ Authorization = "Bearer $API_KEY" } `
             -ErrorAction Stop
+        $triedPath = $path
         break
     } catch {
         $modelsResponse = $null
@@ -73,52 +83,79 @@ foreach ($path in @("/models", "/v1/models")) {
 if ($null -eq $modelsResponse) {
     Write-Host "Error: Could not fetch models from the API." -ForegroundColor Red
     Write-Host "  Tried: $BASE_URL/models and $BASE_URL/v1/models"
-    Write-Host "  Check that your API key is valid and the endpoint supports GET /models."
+    Write-Host "  Check your API key and that the endpoint exposes GET /models."
+    Write-Host ""
+    Write-Host "  Tip: run with -Debug to see the raw API response" -ForegroundColor DarkGray
     exit 1
 }
 
-# Extract model IDs from either {data: [...]} or raw array
+if ($Debug) {
+    Write-Host ""
+    Write-Host "=== DEBUG: raw response from $BASE_URL$triedPath ===" -ForegroundColor Yellow
+    $modelsResponse | ConvertTo-Json -Depth 10
+    Write-Host "=== end of raw response ===" -ForegroundColor Yellow
+    Write-Host ""
+    exit 0
+}
+
+# Extract id AND name from each model entry
 $rawModels = if ($modelsResponse.data) { $modelsResponse.data } else { $modelsResponse }
-$modelIds = @()
+$modelEntries = @()
+$seen = @{}
 foreach ($m in $rawModels) {
+    $id = $null
+    $name = $null
     if ($m -is [string]) {
-        $modelIds += $m
+        $id = $m
+        $name = $m
     } elseif ($m.id) {
-        $modelIds += $m.id
-    } elseif ($m.name) {
-        $modelIds += $m.name
+        $id = $m.id
+        # Prefer name, then info.name, fall back to id
+        if ($m.name) {
+            $name = $m.name
+        } elseif ($m.info -and $m.info.name) {
+            $name = $m.info.name
+        } else {
+            $name = $m.id
+        }
+    } elseif ($m.model) {
+        $id = $m.model
+        $name = if ($m.name) { $m.name } else { $m.model }
+    }
+    if (-not $id -or $seen.ContainsKey($id)) { continue }
+    $seen[$id] = $true
+    $modelEntries += [PSCustomObject]@{
+        Id = $id
+        Name = $name
+        State = if ($currentModels -contains $id) { 'on' } else { 'off' }
     }
 }
-$modelIds = $modelIds | Sort-Object -Unique
 
-if ($modelIds.Count -eq 0) {
+$modelEntries = $modelEntries | Sort-Object Id
+
+if ($modelEntries.Count -eq 0) {
     Write-Host "Error: API returned no models (or unexpected format)." -ForegroundColor Red
+    Write-Host "  Tip: run with -Debug to see the raw API response" -ForegroundColor DarkGray
     exit 1
 }
 
-# Build state map: modelId -> 'on' or 'off'
-$state = @{}
-foreach ($mid in $modelIds) {
-    if ($currentModels -contains $mid) {
-        $state[$mid] = 'on'
-    } else {
-        $state[$mid] = 'off'
-    }
-}
+$loaded = @($modelEntries | Where-Object { $_.State -eq 'on' }).Count
+Write-Host "  Found $($modelEntries.Count) model(s) - $loaded currently loaded"
 
 function Show-Menu {
-    param($ids, $state)
+    param($entries)
     Write-Host ""
     Write-Host "  Available models:" -ForegroundColor White
-    for ($i = 0; $i -lt $ids.Count; $i++) {
+    for ($i = 0; $i -lt $entries.Count; $i++) {
         $num = $i + 1
-        $mid = $ids[$i]
-        if ($state[$mid] -eq 'on') {
+        $entry = $entries[$i]
+        $label = if ($entry.Id -eq $entry.Name) { $entry.Id } else { "$($entry.Id)  ($($entry.Name))" }
+        if ($entry.State -eq 'on') {
             Write-Host "    [" -NoNewline
             Write-Host "*" -ForegroundColor Green -NoNewline
-            Write-Host "] $num) $mid"
+            Write-Host "] $num) $label"
         } else {
-            Write-Host "    [ ] $num) $mid"
+            Write-Host "    [ ] $num) $label"
         }
     }
     Write-Host ""
@@ -127,39 +164,36 @@ function Show-Menu {
 
 # Interactive loop
 while ($true) {
-    Show-Menu -ids $modelIds -state $state
+    Show-Menu -entries $modelEntries
     Write-Host ""
     Write-Host "  Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all, 'n' to deselect all,"
-    $input = Read-Host "  or press Enter to save"
+    $userInput = Read-Host "  or press Enter to save"
 
-    if ([string]::IsNullOrWhiteSpace($input)) { break }
+    if ([string]::IsNullOrWhiteSpace($userInput)) { break }
 
-    if ($input -eq 'a' -or $input -eq 'A') {
-        foreach ($mid in $modelIds) { $state[$mid] = 'on' }
+    if ($userInput -eq 'a' -or $userInput -eq 'A') {
+        foreach ($e in $modelEntries) { $e.State = 'on' }
         continue
     }
-    if ($input -eq 'n' -or $input -eq 'N') {
-        foreach ($mid in $modelIds) { $state[$mid] = 'off' }
+    if ($userInput -eq 'n' -or $userInput -eq 'N') {
+        foreach ($e in $modelEntries) { $e.State = 'off' }
         continue
     }
 
-    $picks = $input -split ',' | ForEach-Object { $_.Trim() }
+    $picks = $userInput -split ',' | ForEach-Object { $_.Trim() }
     foreach ($p in $picks) {
         if ($p -match '^\d+$') {
             $idx = [int]$p - 1
-            if ($idx -ge 0 -and $idx -lt $modelIds.Count) {
-                $mid = $modelIds[$idx]
-                if ($state[$mid] -eq 'on') { $state[$mid] = 'off' } else { $state[$mid] = 'on' }
+            if ($idx -ge 0 -and $idx -lt $modelEntries.Count) {
+                $e = $modelEntries[$idx]
+                if ($e.State -eq 'on') { $e.State = 'off' } else { $e.State = 'on' }
             }
         }
     }
 }
 
 # Build selected list
-$selected = @()
-foreach ($mid in $modelIds) {
-    if ($state[$mid] -eq 'on') { $selected += $mid }
-}
+$selected = @($modelEntries | Where-Object { $_.State -eq 'on' })
 
 if ($selected.Count -eq 0) {
     Write-Host "Warning: No models selected. At least one model must be loaded." -ForegroundColor Yellow
@@ -168,9 +202,9 @@ if ($selected.Count -eq 0) {
 }
 
 # Default template for new models
-function New-ModelEntry($id) {
+function New-ModelEntry($id, $name) {
     return @{
-        name = $id
+        name = $name
         tool_call = $true
         attachment = $true
         modalities = @{ input = @("text", "image"); output = @("text") }
@@ -187,12 +221,12 @@ function Update-ConfigFile($path) {
     $existing = $cfg.provider.$PROVIDER_KEY.models
     $newModels = [ordered]@{}
 
-    foreach ($mid in $selected) {
-        if ($existing -and $existing.PSObject.Properties[$mid]) {
+    foreach ($e in $selected) {
+        if ($existing -and $existing.PSObject.Properties[$e.Id]) {
             # Preserve existing config (temperature, max_tokens, custom name, etc.)
-            $newModels[$mid] = $existing.$mid
+            $newModels[$e.Id] = $existing.($e.Id)
         } else {
-            $newModels[$mid] = New-ModelEntry $mid
+            $newModels[$e.Id] = New-ModelEntry $e.Id $e.Name
         }
     }
 

@@ -244,12 +244,19 @@ By default, the installer loads the single model you entered during setup. To br
 The script:
 1. Reads your current provider config from `~/.config/opencode/opencode.json`
 2. Calls your API's `/models` (or `/v1/models`) endpoint to fetch everything your provider exposes
-3. Shows an interactive list with `[*]` next to models already loaded
+3. Shows an interactive list with `[*]` next to models already loaded. Custom model IDs (with their display names in parentheses) appear alongside base models — useful for Open WebUI setups where you create workspace models with tools stripped out.
 4. You toggle models by number (`2,3,5`), select all (`a`), or clear (`n`)
 5. Press Enter to save — existing model customizations (temperature, max_tokens, etc.) are preserved
 6. Restart the app and the new models appear in the Providers page and chat selector
 
-You can run it any time to add or remove models. It's non-destructive — it only changes the models list under your provider, leaving API keys, plugin config, and everything else alone.
+**Debug mode** — if models don't show up or you want to see exactly what the API returns:
+```bash
+./manage-models.sh --debug    # macOS / Linux
+.\manage-models.ps1 -Debug    # Windows
+```
+This dumps the raw API response and exits without making changes.
+
+You can run the script any time to add or remove models. It's non-destructive — it only changes the models list under your provider, leaving API keys, plugin config, and everything else alone.
 
 ## Changing the API Provider After Installation
 
