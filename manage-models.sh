@@ -168,14 +168,38 @@ LOADED=0
 for s in "${MODEL_STATE[@]}"; do [ "$s" = "on" ] && LOADED=$((LOADED+1)); done
 echo -e "Found ${BOLD}$TOTAL${NC} model(s) — ${BOLD}$LOADED${NC} currently loaded"
 
+# With huge catalogs (OpenRouter has 300+), ask for an optional filter
+FILTER=""
+if [ "$TOTAL" -gt 30 ]; then
+    echo ""
+    echo -ne "${YELLOW}Filter models (e.g. 'claude', 'gpt-5', or press Enter for all): ${NC}"
+    read -r FILTER
+fi
+
+# Build the filtered view — menu only shows items that match, but state
+# is tracked against the full list so unloaded/loaded status is preserved
+build_view() {
+    VIEW_INDICES=()
+    for i in "${!MODEL_IDS[@]}"; do
+        if [ -z "$FILTER" ] || echo "${MODEL_IDS[$i]} ${MODEL_NAMES[$i]}" | grep -qi -- "$FILTER"; then
+            VIEW_INDICES+=("$i")
+        fi
+    done
+}
+build_view
+
 print_menu() {
     echo ""
-    echo -e "${BOLD}Available models:${NC}"
-    for i in "${!MODEL_IDS[@]}"; do
-        num=$((i+1))
+    if [ -n "$FILTER" ]; then
+        echo -e "${BOLD}Available models${NC} ${DIM}(filter: '$FILTER', showing ${#VIEW_INDICES[@]} of ${#MODEL_IDS[@]})${NC}:"
+    else
+        echo -e "${BOLD}Available models:${NC}"
+    fi
+    for pos in "${!VIEW_INDICES[@]}"; do
+        i="${VIEW_INDICES[$pos]}"
+        num=$((pos+1))
         mid="${MODEL_IDS[$i]}"
         mname="${MODEL_NAMES[$i]}"
-        # Show "id (name)" only when name differs from id
         if [ "$mid" = "$mname" ]; then
             label="$mid"
         else
@@ -195,20 +219,28 @@ print_menu() {
 while true; do
     print_menu
     echo ""
-    echo -e "Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all, 'n' to deselect all,"
-    echo -ne "or press Enter to save: "
+    echo -e "Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all (in view), 'n' to deselect all (in view),"
+    echo -e "'/text' to change filter, or press Enter to save:"
+    echo -ne "> "
     read -r INPUT
 
     if [ -z "$INPUT" ]; then
         break
     fi
 
+    # Filter change: "/keyword" or "/" to clear
+    if [[ "$INPUT" == /* ]]; then
+        FILTER="${INPUT:1}"
+        build_view
+        continue
+    fi
+
     if [ "$INPUT" = "a" ] || [ "$INPUT" = "A" ]; then
-        for i in "${!MODEL_STATE[@]}"; do MODEL_STATE[$i]="on"; done
+        for i in "${VIEW_INDICES[@]}"; do MODEL_STATE[$i]="on"; done
         continue
     fi
     if [ "$INPUT" = "n" ] || [ "$INPUT" = "N" ]; then
-        for i in "${!MODEL_STATE[@]}"; do MODEL_STATE[$i]="off"; done
+        for i in "${VIEW_INDICES[@]}"; do MODEL_STATE[$i]="off"; done
         continue
     fi
 
@@ -216,8 +248,9 @@ while true; do
     for p in "${PICKS[@]}"; do
         p=$(echo "$p" | tr -d ' ')
         if [[ "$p" =~ ^[0-9]+$ ]]; then
-            idx=$((p-1))
-            if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#MODEL_IDS[@]}" ]; then
+            pos=$((p-1))
+            if [ "$pos" -ge 0 ] && [ "$pos" -lt "${#VIEW_INDICES[@]}" ]; then
+                idx="${VIEW_INDICES[$pos]}"
                 if [ "${MODEL_STATE[$idx]}" = "on" ]; then
                     MODEL_STATE[$idx]="off"
                 else

@@ -91,11 +91,19 @@ const parseModelString = (modelString: string): { providerId: string; modelId: s
     if (!modelString || typeof modelString !== 'string') {
         return null;
     }
-    const parts = modelString.split('/');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    // Split on the FIRST slash only — OpenRouter model IDs contain slashes
+    // (e.g. "openrouter/anthropic/claude-sonnet-4.5" → provider "openrouter",
+    // model "anthropic/claude-sonnet-4.5")
+    const firstSlash = modelString.indexOf('/');
+    if (firstSlash <= 0 || firstSlash === modelString.length - 1) {
         return null;
     }
-    return { providerId: parts[0], modelId: parts[1] };
+    const providerId = modelString.substring(0, firstSlash);
+    const modelId = modelString.substring(firstSlash + 1);
+    if (!providerId || !modelId) {
+        return null;
+    }
+    return { providerId, modelId };
 };
 
 const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';

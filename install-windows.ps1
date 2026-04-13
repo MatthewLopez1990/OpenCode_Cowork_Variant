@@ -38,30 +38,26 @@ while ([string]::IsNullOrWhiteSpace($APP_NAME)) {
     if ([string]::IsNullOrWhiteSpace($APP_NAME)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$PROVIDER_DISPLAY = ""
-while ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) {
-    $PROVIDER_DISPLAY = Read-Host "  Provider display name (e.g., 'Acme AI')"
-    if ([string]::IsNullOrWhiteSpace($PROVIDER_DISPLAY)) { Write-Host "  Required." -ForegroundColor Red }
-}
-# Generate provider key from display name (lowercase, hyphens, no special chars)
-$PROVIDER_NAME = ($PROVIDER_DISPLAY.ToLower() -replace '[^a-z0-9]', '-' -replace '-+', '-').Trim('-')
-
-$API_URL = ""
-while ([string]::IsNullOrWhiteSpace($API_URL)) {
-    $API_URL = Read-Host "  API base URL (e.g., 'https://api.yourcompany.com/api')"
-    if ([string]::IsNullOrWhiteSpace($API_URL)) { Write-Host "  Required." -ForegroundColor Red }
-}
-
 $API_KEY = ""
 while ([string]::IsNullOrWhiteSpace($API_KEY)) {
-    $API_KEY = Read-Host "  API key"
+    $API_KEY = Read-Host "  OpenRouter API key (starts with 'sk-or-v1-')"
     if ([string]::IsNullOrWhiteSpace($API_KEY)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$DEFAULT_MODEL = Read-Host "  Default model ID (Enter for 'gpt-4o')"
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) { $DEFAULT_MODEL = "gpt-4o" }
+$DEFAULT_MODEL = ""
+while ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
+    $DEFAULT_MODEL = Read-Host "  Default model ID (e.g., 'anthropic/claude-sonnet-4.5')"
+    if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
+        Write-Host "  Required. Browse models at https://openrouter.ai/models" -ForegroundColor Red
+    }
+}
 $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
+
+# OpenRouter is the only provider - hardcoded
+$PROVIDER_NAME = "openrouter"
+$PROVIDER_DISPLAY = "OpenRouter"
+$API_URL = "https://openrouter.ai/api/v1"
 
 Write-Host ""
 Write-Ok "Organization: $APP_NAME"
@@ -179,7 +175,7 @@ if ($ICON_ASSET) {
 
 # Update electron-builder
 $ebContent = Get-Content "$BUILD_DIR\electron-builder.json" -Raw | ConvertFrom-Json
-$ebContent.appId = "com.cowork.$PROVIDER_NAME"
+$ebContent.appId = "com.cowork." + ($APP_NAME.ToLower() -replace '[^a-z0-9]','-')
 $ebContent.productName = $APP_NAME
 Write-Utf8NoBom "$BUILD_DIR\electron-builder.json" ($ebContent | ConvertTo-Json -Depth 10)
 
@@ -287,10 +283,8 @@ New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 $TEMPLATE = "$COWORK_REPO_DIR\config\opencode.json.template"
 if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
-    $content = $content -replace '__PROVIDER_KEY__', $PROVIDER_NAME
     $content = $content -replace '__API_KEY__', $API_KEY
-    $content = $content -replace '__API_URL__', $API_URL
-    $content = $content -replace '__DISPLAY_NAME__', $PROVIDER_DISPLAY
+    $content = $content -replace '__APP_NAME__', $APP_NAME
     $content = $content -replace '__DEFAULT_MODEL__', $DEFAULT_MODEL
     $content = $content -replace '__DEFAULT_MODEL_DISPLAY__', $DEFAULT_MODEL_DISPLAY
     Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\opencode.json" $content
@@ -414,8 +408,8 @@ Write-Ok "Settings configured (merged with existing)"
 $electronCache = "$env:APPDATA\$APP_NAME"
 if (Test-Path $electronCache) { Remove-Item -Recurse -Force $electronCache -ErrorAction SilentlyContinue }
 
-[System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $API_KEY, "User")
-$env:COWORK_API_KEY = $API_KEY
+[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", $API_KEY, "User")
+$env:OPENROUTER_API_KEY = $API_KEY
 Write-Ok "API key set"
 
 Write-Host ""

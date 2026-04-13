@@ -1,24 +1,25 @@
 # OpenCode Cowork
 
-A white-label AI assistant platform for enterprise deployment. Any organization can brand it as their own, connect their AI provider, and deploy with directory sandboxing and professional commands built in.
+A white-label AI assistant platform that runs locally and talks to [OpenRouter](https://openrouter.ai/) for model access. Pick a name, pick a logo, pick your models — the installer handles the rest.
 
 ## What Is OpenCode Cowork?
 
-OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/openchamber) (GUI) and [OpenCode](https://github.com/opencode-ai/opencode) (backend). The install scripts handle everything — cloning, building, branding, and configuring — so your team gets a fully branded desktop AI assistant with a single script.
+OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/openchamber) (GUI) and [OpenCode](https://github.com/opencode-ai/opencode) (backend). The install scripts handle everything — cloning, building, branding, and configuring — so your team gets a fully branded desktop AI assistant with a single script. All model traffic goes through OpenRouter, which gives you access to 300+ models (Claude, GPT, Gemini, Llama, Qwen, Mistral, and more) under one API key.
 
 ### Features
 
-- **Custom branding** — your app name, logos, and provider name throughout the app
-- **Any OpenAI-compatible API** — works with OpenAI, Azure, Anthropic proxies, Ollama, or any provider
+- **Custom branding** — your app name and logos throughout the app
+- **OpenRouter as the single backend** — one API key unlocks the full OpenRouter catalog (300+ models from Anthropic, OpenAI, Google, Meta, Mistral, etc.)
+- **Model management** — browse OpenRouter's catalog and load only the models you want; rename them to whatever you like
 - **Official Anthropic plugins** — legal (9 skills) and finance (8 skills) from [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins)
 - **oh-my-opencode plugin** — enhanced model performance
 - **Directory sandbox** — AI restricted to the project directory (hidden, self-protected `CLAUDE.md`)
-- **Word document creation** — PowerShell + Open XML on Windows, python-docx on macOS/Linux
+- **Word document creation** — PowerShell + .NET on Windows, Python stdlib (`zipfile`) on macOS/Linux — zero external packages
 - **Multi-platform** — Windows (x64 + ARM64), macOS (Intel + Apple Silicon), Linux
 
 ## Prerequisites
 
-- An API key from your AI provider
+- An **OpenRouter API key** — sign up at [https://openrouter.ai/keys](https://openrouter.ai/keys)
 - **Windows 10+**, **macOS 13+**, or **Linux** (Ubuntu, Fedora, Arch, openSUSE)
 - Everything else (Git, Bun, OpenCode CLI) is installed automatically
 
@@ -113,13 +114,13 @@ chmod +x install-linux.sh
 | Prompt | Description | Example |
 |--------|-------------|---------|
 | **App name** | Title bar, shortcuts, branding everywhere | `Acme AI Assistant` |
-| **Provider display name** | Shows in the model selector UI | `Acme AI` |
-| **API base URL** | Your OpenAI-compatible API endpoint | `https://api.yourcompany.com/api` |
-| **API key** | Authentication for your API | `sk-abc123...` |
-| **Default model ID** | The model identifier your API expects | `gpt-4o` |
-| **Default model display name** | Human-readable name in the UI | `GPT-4o` |
+| **OpenRouter API key** | Your key from [openrouter.ai/keys](https://openrouter.ai/keys) | `sk-or-v1-abc123...` |
+| **Default model ID** | The OpenRouter model slug to load first | `anthropic/claude-sonnet-4.5` |
+| **Default model display name** | Human-readable name shown in the UI (optional) | `Claude 4.5 Sonnet` |
 
-Logos are loaded from the `assets/` folder automatically — no URL entry needed.
+That's it. No API URL prompt — OpenRouter's endpoint (`https://openrouter.ai/api/v1`) is wired in automatically. No provider name prompt — it's always "OpenRouter". Browse available model IDs at [openrouter.ai/models](https://openrouter.ai/models) before running the installer.
+
+Logos are loaded from the `assets/` folder automatically — see [Step 2](#step-2-add-your-branding-optional).
 
 ### What the installer does
 
@@ -229,7 +230,7 @@ The AI writes a `.ps1` or `.py` conversion script as a file first, then executes
 
 ## Managing Available Models
 
-By default, the installer loads the single model you entered during setup. To browse your provider's full catalog and add more models after install, use the model manager:
+By default, the installer loads the single model you entered during setup. To browse OpenRouter's full catalog (300+ models) and add more models after install, use the model manager:
 
 **macOS / Linux:**
 ```bash
@@ -242,41 +243,45 @@ By default, the installer loads the single model you entered during setup. To br
 ```
 
 The script:
-1. Reads your current provider config from `~/.config/opencode/opencode.json`
-2. Calls your API's `/models` (or `/v1/models`) endpoint to fetch everything your provider exposes
-3. Shows an interactive list with `[*]` next to models already loaded. Custom model IDs (with their display names in parentheses) appear alongside base models — useful for Open WebUI setups where you create workspace models with tools stripped out.
-4. You toggle models by number (`2,3,5`), select all (`a`), or clear (`n`)
-5. Press Enter to save — existing model customizations (temperature, max_tokens, etc.) are preserved
-6. Restart the app and the new models appear in the Providers page and chat selector
+1. Reads your provider config from `~/.config/opencode/opencode.json`
+2. Calls `https://openrouter.ai/api/v1/models` to fetch OpenRouter's full catalog
+3. Since OpenRouter has 300+ models, it prompts for a **filter** first (e.g. `claude`, `gpt-5`, `gemini`) — press Enter for the full list
+4. Shows an interactive list with `[*]` next to models already loaded. Both the model ID (`anthropic/claude-sonnet-4.5`) and the display name (`Anthropic: Claude 4.5 Sonnet`) are shown.
+5. You toggle models by number (`2,3,5`), select all in view (`a`), clear all in view (`n`), change the filter with `/keyword`, or press Enter to save
+6. Existing model customizations (temperature, max_tokens, etc.) are preserved when you re-run the script
+7. Restart the app and the new models appear in the Providers page and chat selector
 
-**Debug mode** — if models don't show up or you want to see exactly what the API returns:
+**Debug mode** — dump the raw response from OpenRouter's `/models` endpoint without making changes:
 ```bash
 ./manage-models.sh --debug    # macOS / Linux
 .\manage-models.ps1 -Debug    # Windows
 ```
-This dumps the raw API response and exits without making changes.
 
-You can run the script any time to add or remove models. It's non-destructive — it only changes the models list under your provider, leaving API keys, plugin config, and everything else alone.
+The script is non-destructive — it only changes the models list under the `openrouter` provider, leaving your API key, plugin config, and everything else alone.
 
-## Changing the API Provider After Installation
+## Changing the API Key After Installation
 
-Edit `~/.config/opencode/opencode.json` and update the `provider` section:
+Edit `~/.config/opencode/opencode.json` and replace the `apiKey` value under the `openrouter` provider:
 
 ```json
 "provider": {
-  "your-provider": {
-    "name": "Your Provider",
+  "openrouter": {
+    "name": "OpenRouter",
     "npm": "@ai-sdk/openai-compatible",
     "models": { ... },
     "options": {
-      "apiKey": "your-new-key",
-      "baseURL": "https://new-api-url.com/api"
+      "apiKey": "sk-or-v1-your-new-key",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "headers": {
+        "HTTP-Referer": "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant",
+        "X-Title": "Your App Name"
+      }
     }
   }
 }
 ```
 
-The `@ai-sdk/openai-compatible` npm package works with any API that follows the OpenAI API format.
+Don't change the `baseURL` or provider key — they're always `https://openrouter.ai/api/v1` and `openrouter` respectively. Only the `apiKey` should need to change.
 
 ## Adding Custom Commands
 
@@ -365,7 +370,9 @@ The diagnostic checks 12 components and explains WHY each failure occurs with ex
 |---------|-------|-----|
 | "No models found" | Proxy stripping content-encoding | Update server from repo |
 | "Not selected" (model) | Provider not loading | Check config, npm SDK |
-| "Method Not Allowed" | baseURL missing `/api` suffix | Fix URL in `~/.config/opencode/opencode.json` |
+| 401 / "No auth credentials" | Invalid or expired OpenRouter key | Rotate key at [openrouter.ai/keys](https://openrouter.ai/keys), update `apiKey` in `~/.config/opencode/opencode.json` |
+| 402 / "Insufficient credits" | OpenRouter account needs credits | Add credits at [openrouter.ai/credits](https://openrouter.ai/credits) |
+| Model ID rejected | Typo in slug or model deprecated | Browse current catalog at [openrouter.ai/models](https://openrouter.ai/models), or run `./manage-models.sh` to pick from the live list |
 | Sessions fail | No project in settings | Re-run installer (adds project entry) |
 | Default Electron icon | Icon not a real PNG or < 512x512 | Provide a real 512x512+ PNG (not SVG/WebP renamed) |
 | No agents in dropdown | Plugin not loaded yet | Close and reopen app |

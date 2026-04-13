@@ -98,11 +98,16 @@ Write-Host ""
 
 # 6. Environment
 Write-Host "6. Environment" -ForegroundColor Yellow
-$apiKey = [System.Environment]::GetEnvironmentVariable("COWORK_API_KEY", "User")
+$apiKey = [System.Environment]::GetEnvironmentVariable("OPENROUTER_API_KEY", "User")
 if ($apiKey) {
-    Write-Host "   COWORK_API_KEY: SET" -ForegroundColor Green
+    Write-Host "   OPENROUTER_API_KEY: SET" -ForegroundColor Green
 } else {
-    Write-Host "   COWORK_API_KEY: NOT SET" -ForegroundColor Red
+    $legacyKey = [System.Environment]::GetEnvironmentVariable("COWORK_API_KEY", "User")
+    if ($legacyKey) {
+        Write-Host "   OPENROUTER_API_KEY: NOT SET (found legacy COWORK_API_KEY — re-run installer)" -ForegroundColor Yellow
+    } else {
+        Write-Host "   OPENROUTER_API_KEY: NOT SET" -ForegroundColor Red
+    }
 }
 Write-Host ""
 

@@ -3,28 +3,28 @@
   "plugin": [
     "oh-my-opencode@latest"
   ],
-  "model": "__DEFAULT_MODEL__",
+  "model": "openrouter/__DEFAULT_MODEL__",
   "agent": {
     "plan": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "openrouter/__DEFAULT_MODEL__",
       "options": {}
     },
     "build": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "openrouter/__DEFAULT_MODEL__",
       "options": {}
     },
     "title": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "openrouter/__DEFAULT_MODEL__",
       "options": {}
     },
     "summary": {
-      "model": "__DEFAULT_MODEL__",
+      "model": "openrouter/__DEFAULT_MODEL__",
       "options": {}
     }
   },
   "provider": {
-    "__PROVIDER_KEY__": {
-      "name": "__DISPLAY_NAME__",
+    "openrouter": {
+      "name": "OpenRouter",
       "npm": "@ai-sdk/openai-compatible",
       "models": {
         "__DEFAULT_MODEL__": {
@@ -45,7 +45,11 @@
       },
       "options": {
         "apiKey": "__API_KEY__",
-        "baseURL": "__API_URL__"
+        "baseURL": "https://openrouter.ai/api/v1",
+        "headers": {
+          "HTTP-Referer": "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant",
+          "X-Title": "__APP_NAME__"
+        }
       }
     }
   }

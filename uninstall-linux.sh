@@ -23,7 +23,7 @@ echo "  - $APP_NAME binary and desktop entry"
 echo "  - Build directory (~/.opencode-cowork-build)"
 echo "  - OpenCode CLI (~/.opencode)"
 echo "  - Configuration (~/.config/opencode, sf-steward, openchamber)"
-echo "  - COWORK_API_KEY from shell profile"
+echo "  - OPENROUTER_API_KEY (and legacy COWORK_API_KEY) from shell profile"
 echo ""
 echo -e "${YELLOW}This will NOT remove:${NC}"
 echo "  - Bun or Git"
@@ -85,10 +85,10 @@ rm -rf "$HOME/.config/$APP_NAME" 2>/dev/null || true
 echo -e "Step 6: Cleaning shell profile..."
 SHELL_PROFILE="$HOME/.bashrc"
 [ -f "$HOME/.zshrc" ] && SHELL_PROFILE="$HOME/.zshrc"
-if [ -f "$SHELL_PROFILE" ] && grep -q "COWORK_API_KEY" "$SHELL_PROFILE" 2>/dev/null; then
-    grep -v "COWORK_API_KEY" "$SHELL_PROFILE" > "${SHELL_PROFILE}.tmp"
+if [ -f "$SHELL_PROFILE" ] && grep -qE "COWORK_API_KEY|OPENROUTER_API_KEY" "$SHELL_PROFILE" 2>/dev/null; then
+    grep -vE "COWORK_API_KEY|OPENROUTER_API_KEY" "$SHELL_PROFILE" > "${SHELL_PROFILE}.tmp"
     mv "${SHELL_PROFILE}.tmp" "$SHELL_PROFILE"
-    echo -e "${GREEN}✓${NC} Removed COWORK_API_KEY from $SHELL_PROFILE"
+    echo -e "${GREEN}✓${NC} Removed API keys from $SHELL_PROFILE"
 fi
 
 # Step 7: Clean PATH

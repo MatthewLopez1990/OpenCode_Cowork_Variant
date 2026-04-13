@@ -142,13 +142,30 @@ if ($modelEntries.Count -eq 0) {
 $loaded = @($modelEntries | Where-Object { $_.State -eq 'on' }).Count
 Write-Host "  Found $($modelEntries.Count) model(s) - $loaded currently loaded"
 
-function Show-Menu {
-    param($entries)
+# With huge catalogs (OpenRouter has 300+), ask for an optional filter
+$Filter = ""
+if ($modelEntries.Count -gt 30) {
     Write-Host ""
-    Write-Host "  Available models:" -ForegroundColor White
-    for ($i = 0; $i -lt $entries.Count; $i++) {
+    $Filter = Read-Host "  Filter models (e.g. 'claude', 'gpt-5', or press Enter for all)"
+}
+
+function Get-FilteredView {
+    param($entries, $filter)
+    if ([string]::IsNullOrWhiteSpace($filter)) { return $entries }
+    return $entries | Where-Object { $_.Id -match [regex]::Escape($filter) -or $_.Name -match [regex]::Escape($filter) }
+}
+
+function Show-Menu {
+    param($allEntries, $view, $filter)
+    Write-Host ""
+    if ([string]::IsNullOrWhiteSpace($filter)) {
+        Write-Host "  Available models:" -ForegroundColor White
+    } else {
+        Write-Host "  Available models (filter: '$filter', showing $($view.Count) of $($allEntries.Count)):" -ForegroundColor White
+    }
+    for ($i = 0; $i -lt $view.Count; $i++) {
         $num = $i + 1
-        $entry = $entries[$i]
+        $entry = $view[$i]
         $label = if ($entry.Id -eq $entry.Name) { $entry.Id } else { "$($entry.Id)  ($($entry.Name))" }
         if ($entry.State -eq 'on') {
             Write-Host "    [" -NoNewline
@@ -164,19 +181,27 @@ function Show-Menu {
 
 # Interactive loop
 while ($true) {
-    Show-Menu -entries $modelEntries
+    $view = @(Get-FilteredView -entries $modelEntries -filter $Filter)
+    Show-Menu -allEntries $modelEntries -view $view -filter $Filter
     Write-Host ""
-    Write-Host "  Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all, 'n' to deselect all,"
-    $userInput = Read-Host "  or press Enter to save"
+    Write-Host "  Enter numbers to toggle (e.g. '2,3,5'), 'a' to select all (in view), 'n' to deselect all (in view),"
+    Write-Host "  '/text' to change filter, or press Enter to save:"
+    $userInput = Read-Host "  >"
 
     if ([string]::IsNullOrWhiteSpace($userInput)) { break }
 
+    # Filter change
+    if ($userInput.StartsWith('/')) {
+        $Filter = $userInput.Substring(1)
+        continue
+    }
+
     if ($userInput -eq 'a' -or $userInput -eq 'A') {
-        foreach ($e in $modelEntries) { $e.State = 'on' }
+        foreach ($e in $view) { $e.State = 'on' }
         continue
     }
     if ($userInput -eq 'n' -or $userInput -eq 'N') {
-        foreach ($e in $modelEntries) { $e.State = 'off' }
+        foreach ($e in $view) { $e.State = 'off' }
         continue
     }
 
@@ -184,8 +209,8 @@ while ($true) {
     foreach ($p in $picks) {
         if ($p -match '^\d+$') {
             $idx = [int]$p - 1
-            if ($idx -ge 0 -and $idx -lt $modelEntries.Count) {
-                $e = $modelEntries[$idx]
+            if ($idx -ge 0 -and $idx -lt $view.Count) {
+                $e = $view[$idx]
                 if ($e.State -eq 'on') { $e.State = 'off' } else { $e.State = 'on' }
             }
         }

@@ -29,7 +29,7 @@ Write-Host "    - OpenCode CLI (~\.opencode)"
 Write-Host "    - OpenCode configuration (~\.config\opencode)"
 Write-Host "    - App settings (~\.config\sf-steward, ~\.config\openchamber)"
 Write-Host "    - Desktop and Start Menu shortcuts"
-Write-Host "    - COWORK_API_KEY environment variable"
+Write-Host "    - OPENROUTER_API_KEY (and legacy COWORK_API_KEY) environment variables"
 Write-Host ""
 Write-Host "  This will NOT remove:" -ForegroundColor Yellow
 Write-Host "    - Bun or Git"
@@ -151,10 +151,12 @@ if (Test-Path $electronCache) { Remove-Item -Recurse -Force $electronCache -Erro
 
 # Step 7: Remove environment variable
 Write-Host "Step 7: Removing environment variable..." -ForegroundColor White
-if ([System.Environment]::GetEnvironmentVariable("COWORK_API_KEY", "User")) {
-    [System.Environment]::SetEnvironmentVariable("COWORK_API_KEY", $null, "User")
-    Write-Ok "Removed COWORK_API_KEY"
-} else { Write-Skip "COWORK_API_KEY" }
+foreach ($varName in @("OPENROUTER_API_KEY", "COWORK_API_KEY")) {
+    if ([System.Environment]::GetEnvironmentVariable($varName, "User")) {
+        [System.Environment]::SetEnvironmentVariable($varName, $null, "User")
+        Write-Ok "Removed $varName"
+    } else { Write-Skip $varName }
+}
 
 # Step 8: Clean PATH
 Write-Host "Step 8: Cleaning PATH..." -ForegroundColor White

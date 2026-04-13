@@ -35,40 +35,32 @@ while [ -z "$APP_NAME" ]; do
     [ -z "$APP_NAME" ] && echo -e "${RED}Required.${NC}"
 done
 
-PROVIDER_DISPLAY=""
-while [ -z "$PROVIDER_DISPLAY" ]; do
-    echo -ne "${YELLOW}Provider display name (e.g., 'Acme AI'): ${NC}"
-    read -r PROVIDER_DISPLAY
-    [ -z "$PROVIDER_DISPLAY" ] && echo -e "${RED}Required.${NC}"
-done
-
-API_URL=""
-while [ -z "$API_URL" ]; do
-    echo -ne "${YELLOW}API base URL (e.g., 'https://api.yourcompany.com/api'): ${NC}"
-    read -r API_URL
-    [ -z "$API_URL" ] && echo -e "${RED}Required.${NC}"
-done
-
 API_KEY=""
 while [ -z "$API_KEY" ]; do
-    echo -ne "${YELLOW}API key: ${NC}"
+    echo -ne "${YELLOW}OpenRouter API key (starts with 'sk-or-v1-'): ${NC}"
     read -r API_KEY
     [ -z "$API_KEY" ] && echo -e "${RED}Required.${NC}"
 done
 
-echo -ne "Default model ID (Enter for 'gpt-4o'): "
+echo -ne "${YELLOW}Default model ID (e.g., 'anthropic/claude-sonnet-4.5'): ${NC}"
 read -r DEFAULT_MODEL
-[ -z "$DEFAULT_MODEL" ] && DEFAULT_MODEL="gpt-4o"
+while [ -z "$DEFAULT_MODEL" ]; do
+    echo -e "${RED}Required. Browse models at https://openrouter.ai/models${NC}"
+    echo -ne "${YELLOW}Default model ID: ${NC}"
+    read -r DEFAULT_MODEL
+done
 echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
 read -r DEFAULT_MODEL_DISPLAY
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
-# Generate provider key from display name (lowercase, hyphens, no special chars)
-PROVIDER_KEY=$(echo "$PROVIDER_DISPLAY" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+# OpenRouter is the only provider — hardcoded
+PROVIDER_KEY="openrouter"
+PROVIDER_DISPLAY="OpenRouter"
+API_URL="https://openrouter.ai/api/v1"
 
 echo ""
 echo -e "${GREEN}*${NC} App: $APP_NAME"
-echo -e "${GREEN}*${NC} Provider: $PROVIDER_DISPLAY ($API_URL)"
+echo -e "${GREEN}*${NC} Provider: OpenRouter ($API_URL)"
 echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
 # Check for branding assets
@@ -243,10 +235,10 @@ echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 mkdir -p "$OPENCODE_CONFIG_DIR"
 
-# Create config from template
+# Create config from template (OpenRouter is hardcoded in the template)
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
-    sed "s|__PROVIDER_KEY__|$PROVIDER_KEY|g; s|__API_KEY__|$API_KEY|g; s|__API_URL__|$API_URL|g; s|__DISPLAY_NAME__|$PROVIDER_DISPLAY|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
+    sed "s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null || true
 fi
 
@@ -331,9 +323,9 @@ echo -e "${GREEN}*${NC} Settings configured (merged with existing)"
 SHELL_PROFILE="$HOME/.zshrc"
 [ ! -f "$SHELL_PROFILE" ] && SHELL_PROFILE="$HOME/.bashrc"
 if [ -f "$SHELL_PROFILE" ]; then
-    grep -v "COWORK_API_KEY" "$SHELL_PROFILE" > "${SHELL_PROFILE}.tmp" 2>/dev/null || true
+    grep -v -E "COWORK_API_KEY|OPENROUTER_API_KEY" "$SHELL_PROFILE" > "${SHELL_PROFILE}.tmp" 2>/dev/null || true
     mv "${SHELL_PROFILE}.tmp" "$SHELL_PROFILE"
-    echo "export COWORK_API_KEY=\"$API_KEY\"" >> "$SHELL_PROFILE"
+    echo "export OPENROUTER_API_KEY=\"$API_KEY\"" >> "$SHELL_PROFILE"
 fi
 
 echo ""
