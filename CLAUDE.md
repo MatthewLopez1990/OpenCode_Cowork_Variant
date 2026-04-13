@@ -38,19 +38,75 @@ You are RESTRICTED to the current working directory. Before EVERY file operation
 ## Word Document Creation
 
 NEVER use Word COM automation (it hangs non-interactively).
+NEVER use `python-docx` or any third-party package — they're not installed and cannot be installed inside the sandbox.
+The `.docx` format is just a ZIP of XML files, so both platforms can build one with zero external dependencies.
 
-### On Windows — use PowerShell + Open XML:
-1. Use the WRITE tool to create content as a .md file in THIS directory
-2. Use the WRITE tool to create a convert.ps1 script using .NET Open XML
-3. Run: powershell -ExecutionPolicy Bypass -File convert.ps1
-4. Delete convert.ps1 after conversion
-- NEVER use Python on Windows (may not be installed)
+### On Windows — use PowerShell + .NET (stdlib only):
+1. Use the WRITE tool to create content as a `.md` file in THIS directory
+2. Use the WRITE tool to create a `convert.ps1` script using `System.IO.Compression` (built into .NET)
+3. Run: `powershell -ExecutionPolicy Bypass -File convert.ps1`
+4. Delete `convert.ps1` after conversion
 - NEVER pass PowerShell inline through bash (shell corrupts it)
+- NEVER use Python on Windows (may not be installed)
 
-### On macOS/Linux — use Python:
-1. Write content as a .md file
-2. Write a convert.py using python-docx
-3. Run: python3 convert.py
+### On macOS/Linux — use Python stdlib only (NEVER python-docx):
+1. Use the WRITE tool to create content as a `.md` file in THIS directory
+2. Use the WRITE tool to create a `convert.py` script that builds the `.docx` manually using only the `zipfile` module (stdlib). **DO NOT import `docx` / `python-docx`** — it is not installed and `pip install` is blocked.
+3. Run: `python3 convert.py`
+4. Delete `convert.py` after conversion
+
+Use this exact script template for `convert.py` (replace `INPUTFILE` and `OUTPUTFILE`):
+
+```python
+#!/usr/bin/env python3
+import zipfile, html, re
+
+INPUT = 'INPUTFILE.md'
+OUTPUT = 'OUTPUTFILE.docx'
+
+def esc(s):
+    return html.escape(s, quote=False)
+
+with open(INPUT, 'r', encoding='utf-8') as f:
+    md = f.read()
+
+body = ''
+for line in md.split('\n'):
+    line = line.rstrip('\r')
+    m = re.match(r'^# (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^## (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^### (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^[-*] (.+)', line)
+    if m:
+        body += f'<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">  \u2022 {esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    if line.strip() == '':
+        body += '<w:p/>'
+        continue
+    body += f'<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">{esc(line)}</w:t></w:r></w:p>'
+
+doc_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body + '</w:body></w:document>'
+ct_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+rels_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+
+with zipfile.ZipFile(OUTPUT, 'w', zipfile.ZIP_DEFLATED) as z:
+    z.writestr('[Content_Types].xml', ct_xml)
+    z.writestr('_rels/.rels', rels_xml)
+    z.writestr('word/document.xml', doc_xml)
+
+print(f'Created: {OUTPUT}')
+```
+
+The `.docx` is the deliverable — after running the script, tell the user its filename and path. Do not claim the document was created if the script errored.
 
 ---
 

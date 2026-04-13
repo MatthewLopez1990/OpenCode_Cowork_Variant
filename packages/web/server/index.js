@@ -6226,13 +6226,71 @@ Step 3: Use the BASH tool to run: powershell -ExecutionPolicy Bypass -File conve
 
 Step 4: Verify the .docx exists, then delete convert.ps1.
 
-### On macOS/Linux: use Python + python-docx
-Write a convert.py file, then run: python3 convert.py
+### On macOS/Linux: use Python stdlib only — NEVER python-docx (not installed, pip is blocked)
+
+Step 1: Use the WRITE tool to create the document content as a .md file in THIS directory.
+
+Step 2: Use the WRITE tool to create a file called convert.py in THIS directory.
+The convert.py must read the .md file and build the .docx manually using only the zipfile stdlib module.
+Here is the EXACT script content to use (replace INPUTFILE and OUTPUTFILE):
+
+#!/usr/bin/env python3
+import zipfile, html, re
+
+INPUT = 'INPUTFILE.md'
+OUTPUT = 'OUTPUTFILE.docx'
+
+def esc(s):
+    return html.escape(s, quote=False)
+
+with open(INPUT, 'r', encoding='utf-8') as f:
+    md = f.read()
+
+body = ''
+for line in md.split('\\n'):
+    line = line.rstrip('\\r')
+    m = re.match(r'^# (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^## (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^### (.+)', line)
+    if m:
+        body += f'<w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">{esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    m = re.match(r'^[-*] (.+)', line)
+    if m:
+        body += f'<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">  \\u2022 {esc(m.group(1))}</w:t></w:r></w:p>'
+        continue
+    if line.strip() == '':
+        body += '<w:p/>'
+        continue
+    body += f'<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">{esc(line)}</w:t></w:r></w:p>'
+
+doc_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body + '</w:body></w:document>'
+ct_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+rels_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+
+with zipfile.ZipFile(OUTPUT, 'w', zipfile.ZIP_DEFLATED) as z:
+    z.writestr('[Content_Types].xml', ct_xml)
+    z.writestr('_rels/.rels', rels_xml)
+    z.writestr('word/document.xml', doc_xml)
+
+print(f'Created: {OUTPUT}')
+
+Step 3: Use the BASH tool to run: python3 convert.py
+
+Step 4: Verify the .docx exists, then delete convert.py.
 
 ### Rules:
 - WRITE the .ps1/.py as a FILE — NEVER pass scripts inline through bash
 - ALL files in the current project directory — NEVER anywhere else
-- The .docx is the deliverable — tell the user about it
+- The .docx is the deliverable — tell the user about it and provide the filename
+- Do NOT claim the document was created if the script errored — report the error instead
+- NEVER import docx / python-docx — it is NOT installed and pip is blocked
 - NEVER use Word COM (it hangs). NEVER use Python on Windows
 - NEVER create .doc (HTML), .html, or .rtf
 `;
