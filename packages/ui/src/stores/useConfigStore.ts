@@ -4,7 +4,7 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
-import type { ModelMetadata } from "@/types";
+import type { ModelMetadata, LatestByFamily } from "@/types";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { SessionStore } from "./types/sessionTypes";
 import { filterVisibleAgents } from "./useAgentsStore";
@@ -304,6 +304,33 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
     return metadataMap;
 };
 
+const LATEST_MODEL_FAMILY_KEYS = ['anthropic', 'openai', 'google'] as const;
+
+const extractLatestByFamily = (payload: unknown): LatestByFamily => {
+    const result: LatestByFamily = {};
+    if (!isRecord(payload)) return result;
+    const raw = (payload as { latestByFamily?: unknown }).latestByFamily;
+    if (!isRecord(raw)) return result;
+
+    for (const family of LATEST_MODEL_FAMILY_KEYS) {
+        const entry = raw[family];
+        if (!isRecord(entry)) continue;
+        const providerId = entry.providerId;
+        const modelId = entry.modelId;
+        const displayName = entry.displayName;
+        const releaseDate = entry.releaseDate;
+        if (typeof providerId !== 'string' || providerId.length === 0) continue;
+        if (typeof modelId !== 'string' || modelId.length === 0) continue;
+        result[family] = {
+            providerId,
+            modelId,
+            displayName: typeof displayName === 'string' && displayName.length > 0 ? displayName : modelId,
+            releaseDate: typeof releaseDate === 'string' && releaseDate.length > 0 ? releaseDate : null,
+        };
+    }
+    return result;
+};
+
 const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => {
     if (typeof fetch !== 'function') {
         return new Map();
@@ -433,6 +460,7 @@ interface ConfigStore {
     isConnected: boolean;
     isInitialized: boolean;
     modelsMetadata: Map<string, ModelMetadata>;
+    latestByFamily: LatestByFamily;
     // OpenChamber settings-based defaults (take precedence over agent preferences)
     settingsDefaultModel: string | undefined; // format: "provider/model"
     settingsDefaultVariant: string | undefined;
@@ -529,6 +557,7 @@ export const useConfigStore = create<ConfigStore>()(
                 isConnected: false,
                 isInitialized: false,
                 modelsMetadata: new Map<string, ModelMetadata>(),
+                latestByFamily: {},
                 settingsDefaultModel: undefined,
                 settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
@@ -717,6 +746,9 @@ export const useConfigStore = create<ConfigStore>()(
                             );
                             const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
                             const defaults = apiResult?.default || {};
+                            // Cowork server enriches /api/config/providers with latestByFamily;
+                            // the SDK type doesn't declare it, so read it defensively.
+                            const latestByFamily: LatestByFamily = extractLatestByFamily(apiResult);
 
                             const processedProviders: ProviderWithModelList[] = providers.map((provider) => {
                                 const modelRecord = provider.models ?? {};
@@ -755,6 +787,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 if (state.activeDirectoryKey === directoryKey) {
                                     nextState.providers = processedProviders;
                                     nextState.defaultProviders = defaults;
+                                    nextState.latestByFamily = latestByFamily;
 
                                     if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
                                         const parsed = parseModelString(state.settingsDefaultModel);
