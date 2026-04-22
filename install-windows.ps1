@@ -29,29 +29,37 @@ Write-Host "  +==========================================+" -ForegroundColor Blu
 Write-Host ""
 
 # Step 1: Organization Setup
+# Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
+# COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
+# COWORK_LOGO_PATH) skips the corresponding prompt — used by the GUI installer
+# to run this script headlessly.
 Write-Host "Step 1: Organization Setup" -ForegroundColor White
 Write-Host ""
 
-$APP_NAME = ""
+$APP_NAME = if ($env:COWORK_APP_NAME) { $env:COWORK_APP_NAME } else { "" }
 while ([string]::IsNullOrWhiteSpace($APP_NAME)) {
     $APP_NAME = Read-Host "  App name (e.g., 'Acme AI Assistant')"
     if ([string]::IsNullOrWhiteSpace($APP_NAME)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$API_KEY = ""
+$API_KEY = if ($env:COWORK_API_KEY) { $env:COWORK_API_KEY } else { "" }
 while ([string]::IsNullOrWhiteSpace($API_KEY)) {
     $API_KEY = Read-Host "  OpenRouter API key (starts with 'sk-or-v1-')"
     if ([string]::IsNullOrWhiteSpace($API_KEY)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$DEFAULT_MODEL = ""
+$DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "" }
 while ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
     $DEFAULT_MODEL = Read-Host "  Default model ID (e.g., 'anthropic/claude-sonnet-4.5')"
     if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
         Write-Host "  Required. Browse models at https://openrouter.ai/models" -ForegroundColor Red
     }
 }
-$DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
+
+$DEFAULT_MODEL_DISPLAY = if ($env:COWORK_DEFAULT_MODEL_DISPLAY) { $env:COWORK_DEFAULT_MODEL_DISPLAY } else { "" }
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY) -and -not $env:COWORK_APP_NAME) {
+    $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
+}
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
@@ -67,9 +75,19 @@ Write-Ok "Organization: $APP_NAME"
 Write-Ok "Provider (shown to users): $APP_NAME"
 Write-Ok "Model: $DEFAULT_MODEL"
 
-# Check for branding assets
-$ICON_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\icon.png" -ErrorAction SilentlyContinue | Select-Object -First 1
-$LOGO_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\logo.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+# Check for branding assets — env-var paths take precedence over \assets\
+$ICON_ASSET = $null
+$LOGO_ASSET = $null
+if ($env:COWORK_ICON_PATH -and (Test-Path $env:COWORK_ICON_PATH)) {
+    $ICON_ASSET = Get-Item $env:COWORK_ICON_PATH
+} else {
+    $ICON_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\icon.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+if ($env:COWORK_LOGO_PATH -and (Test-Path $env:COWORK_LOGO_PATH)) {
+    $LOGO_ASSET = Get-Item $env:COWORK_LOGO_PATH
+} else {
+    $LOGO_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\logo.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+}
 if ($ICON_ASSET) { Write-Ok "Icon: $($ICON_ASSET.Name)" } else { Write-Host "  - No custom icon -- using defaults" }
 if ($LOGO_ASSET) { Write-Ok "Logo: $($LOGO_ASSET.Name)" } else { Write-Host "  - No custom logo -- using defaults" }
 Write-Host ""

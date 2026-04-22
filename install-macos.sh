@@ -25,32 +25,43 @@ echo -e "${BLUE}${BOLD}+==========================================+${NC}"
 echo ""
 
 # ── Step 1: Organization Setup ──────────────────────────────
+# Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
+# COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
+# COWORK_LOGO_PATH) skips the corresponding prompt — used by the GUI installer
+# to run this script headlessly.
 echo -e "${BOLD}Step 1: Organization Setup${NC}"
 echo ""
 
-APP_NAME=""
+APP_NAME="${COWORK_APP_NAME:-}"
 while [ -z "$APP_NAME" ]; do
     echo -ne "${YELLOW}App name (e.g., 'Acme AI Assistant'): ${NC}"
     read -r APP_NAME
     [ -z "$APP_NAME" ] && echo -e "${RED}Required.${NC}"
 done
 
-API_KEY=""
+API_KEY="${COWORK_API_KEY:-}"
 while [ -z "$API_KEY" ]; do
     echo -ne "${YELLOW}OpenRouter API key (starts with 'sk-or-v1-'): ${NC}"
     read -r API_KEY
     [ -z "$API_KEY" ] && echo -e "${RED}Required.${NC}"
 done
 
-echo -ne "${YELLOW}Default model ID (e.g., 'anthropic/claude-sonnet-4.5'): ${NC}"
-read -r DEFAULT_MODEL
-while [ -z "$DEFAULT_MODEL" ]; do
-    echo -e "${RED}Required. Browse models at https://openrouter.ai/models${NC}"
-    echo -ne "${YELLOW}Default model ID: ${NC}"
+DEFAULT_MODEL="${COWORK_DEFAULT_MODEL:-}"
+if [ -z "$DEFAULT_MODEL" ]; then
+    echo -ne "${YELLOW}Default model ID (e.g., 'anthropic/claude-sonnet-4.5'): ${NC}"
     read -r DEFAULT_MODEL
-done
-echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
-read -r DEFAULT_MODEL_DISPLAY
+    while [ -z "$DEFAULT_MODEL" ]; do
+        echo -e "${RED}Required. Browse models at https://openrouter.ai/models${NC}"
+        echo -ne "${YELLOW}Default model ID: ${NC}"
+        read -r DEFAULT_MODEL
+    done
+fi
+
+DEFAULT_MODEL_DISPLAY="${COWORK_DEFAULT_MODEL_DISPLAY:-}"
+if [ -z "$DEFAULT_MODEL_DISPLAY" ] && [ -z "${COWORK_APP_NAME:-}" ]; then
+    echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
+    read -r DEFAULT_MODEL_DISPLAY
+fi
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
@@ -65,15 +76,23 @@ echo -e "${GREEN}*${NC} App: $APP_NAME"
 echo -e "${GREEN}*${NC} Provider (shown to users): $APP_NAME"
 echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
-# Check for branding assets
+# Check for branding assets — env-var paths take precedence over /assets/
 ICON_ASSET=""
 LOGO_ASSET=""
-for f in "$COWORK_REPO_DIR/assets/"[Ii][Cc][Oo][Nn].[Pp][Nn][Gg]; do
-    [ -f "$f" ] && ICON_ASSET="$f" && break
-done
-for f in "$COWORK_REPO_DIR/assets/"[Ll][Oo][Gg][Oo].[Pp][Nn][Gg]; do
-    [ -f "$f" ] && LOGO_ASSET="$f" && break
-done
+if [ -n "${COWORK_ICON_PATH:-}" ] && [ -f "${COWORK_ICON_PATH}" ]; then
+    ICON_ASSET="${COWORK_ICON_PATH}"
+else
+    for f in "$COWORK_REPO_DIR/assets/"[Ii][Cc][Oo][Nn].[Pp][Nn][Gg]; do
+        [ -f "$f" ] && ICON_ASSET="$f" && break
+    done
+fi
+if [ -n "${COWORK_LOGO_PATH:-}" ] && [ -f "${COWORK_LOGO_PATH}" ]; then
+    LOGO_ASSET="${COWORK_LOGO_PATH}"
+else
+    for f in "$COWORK_REPO_DIR/assets/"[Ll][Oo][Gg][Oo].[Pp][Nn][Gg]; do
+        [ -f "$f" ] && LOGO_ASSET="$f" && break
+    done
+fi
 [ -n "$ICON_ASSET" ] && echo -e "${GREEN}*${NC} Icon: $(basename "$ICON_ASSET")" || echo -e "  - No custom icon — using defaults"
 [ -n "$LOGO_ASSET" ] && echo -e "${GREEN}*${NC} Logo: $(basename "$LOGO_ASSET")" || echo -e "  - No custom logo — using defaults"
 echo ""
