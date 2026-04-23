@@ -20,6 +20,9 @@ NC='\033[0m'
 COWORK_REPO="https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 COWORK_REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$HOME/.opencode-cowork-build"
+# Which branch to build from. Defaults to main; the GUI installer overrides this
+# to the feature branch during pre-merge testing.
+COWORK_GIT_BRANCH="${COWORK_GIT_BRANCH:-main}"
 
 echo ""
 echo -e "${BLUE}${BOLD}+==========================================+${NC}"
@@ -29,33 +32,33 @@ echo -e "${BLUE}${BOLD}+==========================================+${NC}"
 echo ""
 
 # -- Step 1: Organization Setup --
+# Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
+# COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
+# COWORK_LOGO_PATH) skips the corresponding prompt — used by the GUI installer
+# to run this script headlessly.
 echo -e "${BOLD}Step 1: Organization Setup${NC}"
 echo ""
 
-APP_NAME=""
+APP_NAME="${COWORK_APP_NAME:-}"
 while [ -z "$APP_NAME" ]; do
     echo -ne "${YELLOW}App name (e.g., 'Acme AI Assistant'): ${NC}"
     read -r APP_NAME
     [ -z "$APP_NAME" ] && echo -e "${RED}Required.${NC}"
 done
 
-API_KEY=""
+API_KEY="${COWORK_API_KEY:-}"
 while [ -z "$API_KEY" ]; do
     echo -ne "${YELLOW}OpenRouter API key (starts with 'sk-or-v1-'): ${NC}"
     read -r API_KEY
     [ -z "$API_KEY" ] && echo -e "${RED}Required.${NC}"
 done
 
-echo -ne "${YELLOW}Default model ID (e.g., 'anthropic/claude-sonnet-4.5'): ${NC}"
-read -r DEFAULT_MODEL
-while [ -z "$DEFAULT_MODEL" ]; do
-    echo -e "${RED}Required. Browse models at https://openrouter.ai/models${NC}"
-    echo -ne "${YELLOW}Default model ID: ${NC}"
-    read -r DEFAULT_MODEL
-done
-echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
-read -r DEFAULT_MODEL_DISPLAY
-[ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
+# Default model is NEVER prompted — it's statically Claude Sonnet 4.6 so nobody
+# has to pick one. Power users can override by exporting COWORK_DEFAULT_MODEL=<id>
+# before running this script, or by editing ~/.config/opencode/opencode.json
+# after install.
+DEFAULT_MODEL="${COWORK_DEFAULT_MODEL:-anthropic/claude-sonnet-4.6}"
+DEFAULT_MODEL_DISPLAY="${COWORK_DEFAULT_MODEL_DISPLAY:-Claude Sonnet 4.6}"
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
 # in the UI using the APP_NAME so the end user sees the white-label brand,
@@ -71,8 +74,16 @@ echo -e "${GREEN}*${NC} Model: $DEFAULT_MODEL"
 
 ICON_ASSET=""
 LOGO_ASSET=""
-[ -f "$COWORK_REPO_DIR/assets/icon.png" ] && ICON_ASSET="$COWORK_REPO_DIR/assets/icon.png"
-[ -f "$COWORK_REPO_DIR/assets/logo.png" ] && LOGO_ASSET="$COWORK_REPO_DIR/assets/logo.png"
+if [ -n "${COWORK_ICON_PATH:-}" ] && [ -f "${COWORK_ICON_PATH}" ]; then
+    ICON_ASSET="${COWORK_ICON_PATH}"
+elif [ -f "$COWORK_REPO_DIR/assets/icon.png" ]; then
+    ICON_ASSET="$COWORK_REPO_DIR/assets/icon.png"
+fi
+if [ -n "${COWORK_LOGO_PATH:-}" ] && [ -f "${COWORK_LOGO_PATH}" ]; then
+    LOGO_ASSET="${COWORK_LOGO_PATH}"
+elif [ -f "$COWORK_REPO_DIR/assets/logo.png" ]; then
+    LOGO_ASSET="$COWORK_REPO_DIR/assets/logo.png"
+fi
 
 [ -n "$ICON_ASSET" ] && echo -e "${GREEN}*${NC} Icon: icon.png" || echo -e "  - No custom icon -- using defaults"
 [ -n "$LOGO_ASSET" ] && echo -e "${GREEN}*${NC} Logo: logo.png" || echo -e "  - No custom logo -- using defaults"
@@ -111,10 +122,20 @@ echo ""
 # -- Step 3: Clone, Brand, and Build --
 echo -e "${BOLD}Step 3: Building $APP_NAME...${NC}"
 
-if [ -d "$BUILD_DIR" ]; then
-    cd "$BUILD_DIR" && git pull 2>/dev/null || true
+if [ -d "$BUILD_DIR/.git" ]; then
+    cd "$BUILD_DIR"
+    CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+    if [ "$CURRENT_BRANCH" != "$COWORK_GIT_BRANCH" ]; then
+        echo -e "  Existing build on '$CURRENT_BRANCH' — switching to '$COWORK_GIT_BRANCH'"
+        cd ..
+        rm -rf "$BUILD_DIR"
+        git clone --depth 1 --branch "$COWORK_GIT_BRANCH" "$COWORK_REPO" "$BUILD_DIR"
+    else
+        git pull --ff-only 2>/dev/null || true
+    fi
 else
-    git clone --depth 1 "$COWORK_REPO" "$BUILD_DIR"
+    rm -rf "$BUILD_DIR"
+    git clone --depth 1 --branch "$COWORK_GIT_BRANCH" "$COWORK_REPO" "$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
 
@@ -299,6 +320,26 @@ echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 mkdir -p "$OPENCODE_CONFIG_DIR"
 
+# Auto-select the 5 newest models from Anthropic, OpenAI, and Google from
+# OpenRouter. Default = newest Claude Sonnet unless COWORK_DEFAULT_MODEL pins it.
+FETCHED_MODELS_FILE="$(mktemp -t cowork-models.XXXXXX.json)"
+echo -e "  Fetching newest Anthropic / OpenAI / Google models from OpenRouter..."
+if FETCH_OUTPUT=$(python3 "$COWORK_REPO_DIR/scripts/fetch-top-models.py" "$FETCHED_MODELS_FILE" 2>/dev/null); then
+    FETCHED_DEFAULT_MODEL=$(echo "$FETCH_OUTPUT" | grep '^DEFAULT_MODEL=' | head -1 | cut -d= -f2-)
+    FETCHED_DEFAULT_DISPLAY=$(echo "$FETCH_OUTPUT" | grep '^DEFAULT_MODEL_DISPLAY=' | head -1 | cut -d= -f2-)
+    if [ -z "${COWORK_DEFAULT_MODEL:-}" ] && [ -n "$FETCHED_DEFAULT_MODEL" ]; then
+        DEFAULT_MODEL="$FETCHED_DEFAULT_MODEL"
+        DEFAULT_MODEL_DISPLAY="$FETCHED_DEFAULT_DISPLAY"
+    fi
+fi
+
+# Final safety net — force the static default if somehow still empty.
+if [ -z "$DEFAULT_MODEL" ]; then
+    DEFAULT_MODEL="anthropic/claude-sonnet-4.6"
+    DEFAULT_MODEL_DISPLAY="Claude Sonnet 4.6"
+fi
+[ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
+
 TEMPLATE="$COWORK_REPO_DIR/config/opencode.json.template"
 if [ -f "$TEMPLATE" ]; then
     sed "s|__PROVIDER_KEY__|$PROVIDER_NAME|g; s|__API_KEY__|$API_KEY|g; s|__APP_NAME__|$APP_NAME|g; s|__DEFAULT_MODEL__|$DEFAULT_MODEL|g; s|__DEFAULT_MODEL_DISPLAY__|$DEFAULT_MODEL_DISPLAY|g" "$TEMPLATE" > "$OPENCODE_CONFIG_DIR/opencode.json"
@@ -306,7 +347,30 @@ if [ -f "$TEMPLATE" ]; then
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null
 fi
 
-# Merge extra models from config/models.json
+# Merge the 15 fetched models (top 5 per family) into the config.
+if [ -s "$FETCHED_MODELS_FILE" ]; then
+    python3 -c "
+import json, sys
+try:
+    with open('$OPENCODE_CONFIG_DIR/opencode.json') as f:
+        config = json.load(f)
+    with open('$FETCHED_MODELS_FILE') as f:
+        extra = json.load(f)
+    provider_key = '$PROVIDER_NAME'
+    if provider_key in config.get('provider', {}):
+        models = extra.get('models', {})
+        config['provider'][provider_key]['models'].update(models)
+        with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f'  Loaded {len(models)} latest models from Anthropic / OpenAI / Google')
+except Exception as e:
+    print(f'Note: {e}', file=sys.stderr)
+" 2>/dev/null || true
+    cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null
+fi
+rm -f "$FETCHED_MODELS_FILE" 2>/dev/null || true
+
+# Merge user-provided extras from config/models.json (optional, not in repo by default).
 MODELS_FILE="$COWORK_REPO_DIR/config/models.json"
 if [ -f "$MODELS_FILE" ]; then
     python3 -c "
@@ -322,7 +386,7 @@ try:
         config['provider'][provider_key]['models'].update(models)
         with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
             json.dump(config, f, indent=2)
-        print(f'Added {len(models)} extra models from models.json')
+        print(f'Merged {len(models)} extra models from models.json')
 except Exception as e:
     print(f'Note: Could not add extra models: {e}', file=sys.stderr)
 "
@@ -427,10 +491,4 @@ echo -e "  ${GREEN}*${NC} Directory sandbox"
 echo ""
 echo -e "  Default project: $DEFAULT_PROJECT"
 echo ""
-echo -ne "Launch now? (y/n): "
-read -r LAUNCH
-if [[ "$LAUNCH" =~ ^[Yy] ]]; then
-    nohup "$HOME/.local/bin/$APP_BIN_NAME" > /dev/null 2>&1 &
-    disown
-    echo -e "  ${GREEN}$APP_NAME is running. You can close this terminal.${NC}"
-fi
+echo -e "${GREEN}Done.${NC} Launch $APP_NAME from your applications menu."

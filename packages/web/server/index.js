@@ -51,6 +51,10 @@ const HEALTH_CHECK_INTERVAL = 15000;
 const SHUTDOWN_TIMEOUT = 10000;
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
+// Families we surface as "Latest" quick-picks in the model selector. Each family
+// is identified by the first path segment of a model ID (anthropic/*, openai/*,
+// google/*). Order controls display order in the UI.
+const LATEST_MODEL_FAMILIES = ['anthropic', 'openai', 'google'];
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
@@ -3658,6 +3662,115 @@ let healthCheckInterval = null;
 let server = null;
 let cachedModelsMetadata = null;
 let cachedModelsMetadataTimestamp = 0;
+let modelsMetadataWarmupInFlight = null;
+
+// Fire-and-forget warmup of models.dev cache. Idempotent — if a fetch is
+// already running or the cache is fresh, this is a no-op. Callers should not
+// await it; they should read `cachedModelsMetadata` on the next request after
+// the fetch resolves.
+const warmModelsMetadataCache = () => {
+  const now = Date.now();
+  if (cachedModelsMetadata && now - cachedModelsMetadataTimestamp < MODELS_METADATA_CACHE_TTL) {
+    return;
+  }
+  if (modelsMetadataWarmupInFlight) {
+    return;
+  }
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+  modelsMetadataWarmupInFlight = fetch(MODELS_DEV_API_URL, {
+    signal: controller?.signal,
+    headers: { Accept: 'application/json' },
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`models.dev responded with status ${response.status}`);
+      }
+      const data = await response.json();
+      cachedModelsMetadata = data;
+      cachedModelsMetadataTimestamp = Date.now();
+    })
+    .catch((error) => {
+      console.warn('Failed to warm models.dev metadata cache:', error?.message || error);
+    })
+    .finally(() => {
+      if (timeout) clearTimeout(timeout);
+      modelsMetadataWarmupInFlight = null;
+    });
+};
+
+const parseReleaseTimestamp = (value) => {
+  if (typeof value !== 'string' || value.length === 0) return 0;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : 0;
+};
+
+// Pick the flagship (most recently released) model per family. Accepts the
+// already-filtered provider list (from the Cowork allowlist) and the raw
+// models.dev payload. Matches provider model IDs to models.dev entries via
+// two paths: (1) models.dev's per-family map, keyed by short ID, and (2) the
+// aggregated openrouter entry, keyed by the full `family/model` ID — whichever
+// has a release_date wins. Returns an object keyed by family with
+// { providerId, modelId, releaseDate, displayName }.
+const computeLatestByFamily = (providers, metadataPayload) => {
+  const result = {};
+  if (!metadataPayload || typeof metadataPayload !== 'object') return result;
+  if (!Array.isArray(providers) || providers.length === 0) return result;
+
+  const openrouterModels = metadataPayload.openrouter && typeof metadataPayload.openrouter === 'object'
+    ? (metadataPayload.openrouter.models || {})
+    : {};
+
+  for (const family of LATEST_MODEL_FAMILIES) {
+    const familyEntry = metadataPayload[family];
+    const familyModels = familyEntry && typeof familyEntry === 'object'
+      ? (familyEntry.models || {})
+      : {};
+
+    let best = null;
+
+    for (const provider of providers) {
+      const modelMap = provider?.models;
+      if (!modelMap || typeof modelMap !== 'object') continue;
+
+      for (const [modelId, modelEntry] of Object.entries(modelMap)) {
+        if (typeof modelId !== 'string' || !modelId.startsWith(`${family}/`)) continue;
+
+        const shortId = modelId.slice(family.length + 1);
+        const meta = familyModels[shortId] || familyModels[modelId] || openrouterModels[modelId];
+        if (!meta || typeof meta !== 'object') continue;
+
+        const ts = parseReleaseTimestamp(meta.release_date) || parseReleaseTimestamp(meta.last_updated);
+        if (ts === 0) continue;
+        if (meta.deprecated === true) continue;
+
+        if (!best || ts > best.ts) {
+          const displayName = (modelEntry && typeof modelEntry.name === 'string' && modelEntry.name.trim().length > 0)
+            ? modelEntry.name.trim()
+            : (typeof meta.name === 'string' && meta.name.trim().length > 0 ? meta.name.trim() : modelId);
+          best = {
+            providerId: provider.id,
+            modelId,
+            releaseDate: meta.release_date || meta.last_updated || null,
+            displayName,
+            ts,
+          };
+        }
+      }
+    }
+
+    if (best) {
+      result[family] = {
+        providerId: best.providerId,
+        modelId: best.modelId,
+        releaseDate: best.releaseDate,
+        displayName: best.displayName,
+      };
+    }
+  }
+
+  return result;
+};
 let expressApp = null;
 let currentRestartPromise = null;
 let isRestartingOpenCode = false;
@@ -7188,7 +7301,10 @@ function setupProxy(app) {
           }
         }
 
-        res.json({ providers: filteredProviders, default: filteredDefaults });
+        warmModelsMetadataCache();
+        const latestByFamily = computeLatestByFamily(filteredProviders, cachedModelsMetadata);
+
+        res.json({ providers: filteredProviders, default: filteredDefaults, latestByFamily });
       } catch (error) {
         if (!res.headersSent) {
           res.status(503).json({ error: 'Failed to load providers' });

@@ -1,0 +1,51 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "productName": "ChatFortAI Cowork Installer",
+  "version": "0.1.0",
+  "identifier": "ai.chatfort.cowork.installer",
+  "build": {
+    "beforeDevCommand": "bun run vite:dev",
+    "beforeBuildCommand": "bun run vite:build",
+    "devUrl": "http://localhost:1421",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ChatFortAI Cowork Installer",
+        "width": 820,
+        "height": 640,
+        "minWidth": 720,
+        "minHeight": 560,
+        "resizable": true,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis", "appimage"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "copyright": "",
+    "shortDescription": "Install and brand your OpenCode Cowork app",
+    "longDescription": "Drop in your logo and icon, pick the latest model, and install a branded AI assistant in one click — no terminal required.",
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

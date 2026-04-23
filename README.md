@@ -8,6 +8,8 @@ OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/opencha
 
 ### Features
 
+- **Two ways to install** — click-through **GUI installer** for beginners, **shell scripts** for power users. Both produce the same branded app.
+- **Dynamic "Latest" models** — a pinned **Latest** section at the top of the model picker always shows the newest Anthropic, OpenAI, and Google release. The app re-checks `models.dev` every 5 minutes, so new flagships appear automatically — no code changes needed when `claude-sonnet-5` or `gpt-6` ships.
 - **Custom branding** — your app name and logos throughout the app
 - **OpenRouter as the single backend** — one API key unlocks the full OpenRouter catalog (300+ models from Anthropic, OpenAI, Google, Meta, Mistral, etc.)
 - **Model management** — browse OpenRouter's catalog and load only the models you want; rename them to whatever you like
@@ -23,7 +25,32 @@ OpenCode Cowork is built on [OpenChamber](https://github.com/openchamber/opencha
 - **Windows 10+**, **macOS 13+**, or **Linux** (Ubuntu, Fedora, Arch, openSUSE)
 - Everything else (Git, Bun, OpenCode CLI) is installed automatically
 
-## Setup Guide
+## Installing — the Easy Way (GUI)
+
+Double-click a prebuilt installer for your platform. No terminal, no scripts, nothing to compile.
+
+Prebuilt binaries live in [`installers/`](installers/) on this branch and on the [Releases](https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant/releases) page once cut.
+
+| Platform | File | Status |
+|----------|------|--------|
+| **macOS** (Apple Silicon, M1+) | [`installers/ChatFortAI Cowork Installer_0.1.0_aarch64.dmg`](installers/) | ✅ ready |
+| **macOS** (Intel) | `ChatFortAI Cowork Installer_0.1.0_x64.dmg` | ⏳ built by the `Build Installer` GitHub Action |
+| **Windows** (x64) | `ChatFortAI Cowork Installer_0.1.0_x64-setup.exe` | ⏳ built by the `Build Installer` GitHub Action — unsigned in v1, click "More info → Run anyway" on SmartScreen |
+| **Linux** (x64) | `ChatFortAI Cowork Installer_0.1.0_amd64.AppImage` | ⏳ built by the `Build Installer` GitHub Action — `chmod +x` then run |
+
+The installer walks you through three steps:
+
+1. **Branding** — type your app name (defaults to **ChatFortAI Cowork**), paste your OpenRouter API key, drag in your icon and logo PNGs (both optional; ChatFortAI defaults are used if omitted).
+2. **Install** — watch the live log as the installer clones the repo, installs prerequisites, brands the app, and auto-loads the 5 newest models from Anthropic, OpenAI, and Google (Claude Sonnet becomes the starting default). Finishes in 3–5 minutes.
+3. **Finish** — your branded app is installed and ready to launch from Applications (macOS), Start Menu (Windows), or your launcher (Linux).
+
+**Note**: the GUI installer requires `git` on your PATH. On macOS, installing Xcode Command Line Tools (`xcode-select --install`) provides it; Windows and Linux installers install git automatically if missing.
+
+---
+
+## Installing — Advanced (Shell Scripts)
+
+Prefer a terminal? The original shell installers are still here and unchanged — the GUI installer drives them behind the scenes.
 
 ### Step 1: Clone the repo
 
@@ -121,6 +148,28 @@ chmod +x install-linux.sh
 That's it. No API URL prompt — OpenRouter's endpoint (`https://openrouter.ai/api/v1`) is wired in automatically. No provider name prompt — the **provider shown in the UI uses your app name**, so clients see "Acme AI Assistant" (or whatever you choose) as the provider, not "OpenRouter". The OpenRouter backend is fully white-labeled. Browse available model IDs at [openrouter.ai/models](https://openrouter.ai/models) before running the installer.
 
 Logos are loaded from the `assets/` folder automatically — see [Step 2](#step-2-add-your-branding-optional).
+
+### Headless (scripted) installs
+
+Every prompt can be skipped by pre-setting an env var. All three scripts honor the same set — handy for CI or for the GUI installer:
+
+| Env var | Replaces prompt |
+|---------|-----------------|
+| `COWORK_APP_NAME` | App name |
+| `COWORK_API_KEY` | OpenRouter API key |
+| `COWORK_DEFAULT_MODEL` | Default model ID |
+| `COWORK_DEFAULT_MODEL_DISPLAY` | Display name (optional) |
+| `COWORK_ICON_PATH` | Absolute path to `icon.png` (overrides `assets/`) |
+| `COWORK_LOGO_PATH` | Absolute path to `logo.png` (overrides `assets/`) |
+
+With all three required vars set, the script runs without any prompts:
+
+```bash
+COWORK_APP_NAME="Acme AI" \
+COWORK_API_KEY="sk-or-v1-..." \
+COWORK_DEFAULT_MODEL="anthropic/claude-sonnet-4.5" \
+./install-macos.sh
+```
 
 ### What the installer does
 
@@ -328,7 +377,9 @@ OpenCode_Cowork_Variant/
 ├── electron/
 │   └── main.cjs                  # Desktop app + sandbox injection
 ├── electron-builder.json
-├── install-windows.ps1           # Windows x64 installer
+├── packages/
+│   └── installer/                ← Tauri GUI installer (cross-platform)
+├── install-windows.ps1           # Windows x64 installer (shell, still works)
 ├── install-windows-arm64.ps1     # Windows ARM64 installer
 ├── install-macos.sh              # macOS installer
 ├── install-linux.sh              # Linux installer

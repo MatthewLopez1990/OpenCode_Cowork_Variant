@@ -68,7 +68,8 @@ __pycache__/
 venv/
 .venv/
 
-# Installer artifacts
+# Installer artifacts — ignored everywhere EXCEPT the installers/ directory,
+# which is our release-ready distributables bucket (prebuilt GUI installers).
 *.exe
 *.msi
 *.dmg
@@ -76,6 +77,13 @@ venv/
 *.deb
 *.rpm
 *.snap
+!installers/**/*.exe
+!installers/**/*.msi
+!installers/**/*.dmg
+!installers/**/*.AppImage
+!installers/**/*.deb
+!installers/**/*.rpm
+!installers/**/*.snap
 
 # Build artifacts
 *.tgz
@@ -93,3 +101,4 @@ workspaces/
 
 # Branding (user provides their own)
 branding/
+.claude/

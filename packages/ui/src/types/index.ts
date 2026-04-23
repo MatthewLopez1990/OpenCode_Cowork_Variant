@@ -71,3 +71,12 @@ export interface ModelMetadata {
   release_date?: string;
   last_updated?: string;
 }
+
+export interface LatestFamilyModel {
+  providerId: string;
+  modelId: string;
+  releaseDate: string | null;
+  displayName: string;
+}
+
+export type LatestByFamily = Partial<Record<'anthropic' | 'openai' | 'google', LatestFamilyModel>>;

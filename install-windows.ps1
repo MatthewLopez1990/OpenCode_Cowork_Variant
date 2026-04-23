@@ -11,6 +11,9 @@ $ErrorActionPreference = "Stop"
 $COWORK_REPO = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
+# Which branch to build from. Defaults to main; the GUI installer overrides this
+# to the feature branch during pre-merge testing.
+$COWORK_GIT_BRANCH = if ($env:COWORK_GIT_BRANCH) { $env:COWORK_GIT_BRANCH } else { "main" }
 
 function Write-Ok($m) { Write-Host "  * $m" -ForegroundColor Green }
 function Write-Warn($m) { Write-Host "  ! $m" -ForegroundColor Yellow }
@@ -29,30 +32,30 @@ Write-Host "  +==========================================+" -ForegroundColor Blu
 Write-Host ""
 
 # Step 1: Organization Setup
+# Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
+# COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
+# COWORK_LOGO_PATH) skips the corresponding prompt — used by the GUI installer
+# to run this script headlessly.
 Write-Host "Step 1: Organization Setup" -ForegroundColor White
 Write-Host ""
 
-$APP_NAME = ""
+$APP_NAME = if ($env:COWORK_APP_NAME) { $env:COWORK_APP_NAME } else { "" }
 while ([string]::IsNullOrWhiteSpace($APP_NAME)) {
     $APP_NAME = Read-Host "  App name (e.g., 'Acme AI Assistant')"
     if ([string]::IsNullOrWhiteSpace($APP_NAME)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$API_KEY = ""
+$API_KEY = if ($env:COWORK_API_KEY) { $env:COWORK_API_KEY } else { "" }
 while ([string]::IsNullOrWhiteSpace($API_KEY)) {
     $API_KEY = Read-Host "  OpenRouter API key (starts with 'sk-or-v1-')"
     if ([string]::IsNullOrWhiteSpace($API_KEY)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$DEFAULT_MODEL = ""
-while ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-    $DEFAULT_MODEL = Read-Host "  Default model ID (e.g., 'anthropic/claude-sonnet-4.5')"
-    if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-        Write-Host "  Required. Browse models at https://openrouter.ai/models" -ForegroundColor Red
-    }
-}
-$DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
+# Default model is NEVER prompted — it's statically Claude Sonnet 4.6. Power
+# users can override by setting $env:COWORK_DEFAULT_MODEL before running this
+# script, or by editing %USERPROFILE%\.config\opencode\opencode.json after install.
+$DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "anthropic/claude-sonnet-4.6" }
+$DEFAULT_MODEL_DISPLAY = if ($env:COWORK_DEFAULT_MODEL_DISPLAY) { $env:COWORK_DEFAULT_MODEL_DISPLAY } else { "Claude Sonnet 4.6" }
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
 # in the UI using the APP_NAME so the end user sees the white-label brand,
@@ -67,9 +70,19 @@ Write-Ok "Organization: $APP_NAME"
 Write-Ok "Provider (shown to users): $APP_NAME"
 Write-Ok "Model: $DEFAULT_MODEL"
 
-# Check for branding assets
-$ICON_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\icon.png" -ErrorAction SilentlyContinue | Select-Object -First 1
-$LOGO_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\logo.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+# Check for branding assets — env-var paths take precedence over \assets\
+$ICON_ASSET = $null
+$LOGO_ASSET = $null
+if ($env:COWORK_ICON_PATH -and (Test-Path $env:COWORK_ICON_PATH)) {
+    $ICON_ASSET = Get-Item $env:COWORK_ICON_PATH
+} else {
+    $ICON_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\icon.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+if ($env:COWORK_LOGO_PATH -and (Test-Path $env:COWORK_LOGO_PATH)) {
+    $LOGO_ASSET = Get-Item $env:COWORK_LOGO_PATH
+} else {
+    $LOGO_ASSET = Get-ChildItem "$COWORK_REPO_DIR\assets\logo.png" -ErrorAction SilentlyContinue | Select-Object -First 1
+}
 if ($ICON_ASSET) { Write-Ok "Icon: $($ICON_ASSET.Name)" } else { Write-Host "  - No custom icon -- using defaults" }
 if ($LOGO_ASSET) { Write-Ok "Logo: $($LOGO_ASSET.Name)" } else { Write-Host "  - No custom logo -- using defaults" }
 Write-Host ""
@@ -115,11 +128,20 @@ Write-Host ""
 # Step 3: Clone and build
 Write-Host "Step 3: Building $APP_NAME..." -ForegroundColor White
 
-if (Test-Path $BUILD_DIR) {
+if (Test-Path "$BUILD_DIR\.git") {
     Set-Location $BUILD_DIR
-    git pull 2>&1 | Out-Null
+    $CURRENT_BRANCH = (git rev-parse --abbrev-ref HEAD 2>$null)
+    if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
+        Write-Host "  Existing build on '$CURRENT_BRANCH' — switching to '$COWORK_GIT_BRANCH'"
+        Set-Location ..
+        Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+        git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+    } else {
+        git pull --ff-only 2>&1 | Out-Null
+    }
 } else {
-    git clone --depth 1 $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+    Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+    git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
 }
 
 Set-Location $BUILD_DIR
@@ -283,6 +305,31 @@ Write-Host "Step 4: Configuring AI models..." -ForegroundColor White
 $OPENCODE_CONFIG_DIR = "$env:USERPROFILE\.config\opencode"
 New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 
+# Auto-select the 5 newest models from Anthropic, OpenAI, and Google from
+# OpenRouter. Default = newest Claude Sonnet unless COWORK_DEFAULT_MODEL pins it.
+$FETCHED_MODELS_FILE = [System.IO.Path]::GetTempFileName() + '.json'
+Write-Host "  Fetching newest Anthropic / OpenAI / Google models from OpenRouter..."
+try {
+    $fetchOutput = python3 "$COWORK_REPO_DIR\scripts\fetch-top-models.py" $FETCHED_MODELS_FILE 2>$null
+    if ($LASTEXITCODE -eq 0 -and $fetchOutput) {
+        $fetchedDefault = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+        $fetchedDisplay = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL_DISPLAY=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+        if (-not $env:COWORK_DEFAULT_MODEL -and $fetchedDefault) {
+            $DEFAULT_MODEL = $fetchedDefault
+            $DEFAULT_MODEL_DISPLAY = $fetchedDisplay
+        }
+    }
+} catch {
+    Write-Warn "Could not auto-fetch models: $_"
+}
+
+# Final safety net — force the static default if somehow still empty.
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
+    $DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
+    $DEFAULT_MODEL_DISPLAY = "Claude Sonnet 4.6"
+}
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
+
 $TEMPLATE = "$COWORK_REPO_DIR\config\opencode.json.template"
 if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
@@ -295,6 +342,28 @@ if (Test-Path $TEMPLATE) {
     # Also copy to build directory (OpenCode reads config from CWD)
     Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
     Write-Ok "AI models configured (default: $DEFAULT_MODEL)"
+}
+
+# Merge the 15 fetched models (top 5 per family) into the config.
+if (Test-Path $FETCHED_MODELS_FILE) {
+    try {
+        $config = Get-Content "$OPENCODE_CONFIG_DIR\opencode.json" -Raw | ConvertFrom-Json
+        $extra = Get-Content $FETCHED_MODELS_FILE -Raw | ConvertFrom-Json
+        $providerKey = $PROVIDER_NAME
+        if ($config.provider.PSObject.Properties[$providerKey]) {
+            $added = 0
+            foreach ($m in $extra.models.PSObject.Properties) {
+                $config.provider.$providerKey.models | Add-Member -MemberType NoteProperty -Name $m.Name -Value $m.Value -Force
+                $added++
+            }
+            Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\opencode.json" ($config | ConvertTo-Json -Depth 10)
+            Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
+            Write-Ok "Loaded $added latest models from Anthropic / OpenAI / Google"
+        }
+    } catch {
+        Write-Warn "Could not load fetched models: $_"
+    }
+    Remove-Item -Path $FETCHED_MODELS_FILE -Force -ErrorAction SilentlyContinue
 }
 
 # Merge extra models from config/models.json
@@ -428,10 +497,4 @@ Write-Host "  * Legal + Finance commands" -ForegroundColor Green
 Write-Host "  * Directory sandbox (hidden CLAUDE.md)" -ForegroundColor Green
 Write-Host ""
 
-$launch = Read-Host "  Launch now? (y/n)"
-if ($launch -match "^[Yy]") {
-    if (Test-Path "$INSTALL_DIR\$EXE_NAME") {
-        Start-Process -FilePath "$INSTALL_DIR\$EXE_NAME" -WorkingDirectory $INSTALL_DIR -WindowStyle Normal
-        Write-Host "  $APP_NAME is running. You can close this terminal." -ForegroundColor Green
-    }
-}
+Write-Host "Done. Launch $APP_NAME from your Start Menu." -ForegroundColor Green

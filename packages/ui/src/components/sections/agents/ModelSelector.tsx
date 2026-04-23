@@ -10,15 +10,38 @@ import { Input } from '@/components/ui/input';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLine, RiPencilAiLine, RiSearchLine, RiStarFill, RiStarLine, RiTimeLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLine, RiPencilAiLine, RiSearchLine, RiSparkling2Fill, RiStarFill, RiStarLine, RiTimeLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useModelLists } from '@/hooks/useModelLists';
-import type { ModelMetadata } from '@/types';
+import type { LatestFamilyModel, ModelMetadata } from '@/types';
 
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+type LatestFamilyKey = 'anthropic' | 'openai' | 'google';
+const LATEST_FAMILY_ORDER: readonly LatestFamilyKey[] = ['anthropic', 'openai', 'google'] as const;
+const LATEST_FAMILY_LABELS: Record<LatestFamilyKey, string> = {
+    anthropic: 'Anthropic',
+    openai: 'OpenAI',
+    google: 'Google',
+};
+
+const formatReleasedAgo = (releaseDate: string | null | undefined): string => {
+    if (!releaseDate) return '';
+    const ts = Date.parse(releaseDate);
+    if (!Number.isFinite(ts)) return '';
+    const diffMs = Date.now() - ts;
+    if (diffMs < 0) return '';
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    if (days === 0) return 'released today';
+    if (days === 1) return 'released yesterday';
+    if (days < 30) return `released ${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return months === 1 ? 'released 1mo ago' : `released ${months}mo ago`;
+    const years = Math.floor(days / 365);
+    return years === 1 ? 'released 1y ago' : `released ${years}y ago`;
+};
 
 interface ModelSelectorProps {
     providerId: string;
@@ -55,7 +78,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     allowedProviderIds,
     placeholder
 }) => {
-    const { providers, modelsMetadata } = useConfigStore();
+    const { providers, modelsMetadata, latestByFamily } = useConfigStore();
     const isMobile = useUIStore(state => state.isMobile);
     const hiddenModels = useUIStore(state => state.hiddenModels);
     const { toggleFavoriteModel, isFavoriteModel, addRecentModel } = useUIStore();
@@ -222,6 +245,73 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         );
     };
 
+    // Render a Latest quick-pick row for the desktop dropdown. Visually
+    // distinct from regular rows: family logo + family label + "released Xd ago".
+    const renderLatestRow = (
+        family: LatestFamilyKey,
+        entry: LatestFamilyModel,
+        model: ProviderModel,
+        flatIndex: number,
+        isHighlighted: boolean
+    ) => {
+        const isSelected = providerId === entry.providerId && modelId === entry.modelId;
+        const released = formatReleasedAgo(entry.releaseDate);
+        const displayName = getModelDisplayName(model as Record<string, unknown>) || entry.displayName;
+        return (
+            <div
+                key={`latest-${family}-${entry.providerId}-${entry.modelId}`}
+                ref={(el) => { itemRefs.current[flatIndex] = el; }}
+                className={cn(
+                    'typography-meta group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer',
+                    isHighlighted ? 'bg-interactive-selection' : 'hover:bg-interactive-hover/50'
+                )}
+                onClick={() => handleProviderAndModelChange(entry.providerId, entry.modelId)}
+                onMouseEnter={() => setSelectedIndex(flatIndex)}
+            >
+                <ProviderLogo providerId={family} className="h-3.5 w-3.5 flex-shrink-0" />
+                <div className="flex items-baseline gap-1.5 flex-1 min-w-0">
+                    <span className="font-medium truncate">{displayName}</span>
+                    <span className="typography-micro text-muted-foreground flex-shrink-0">
+                        {LATEST_FAMILY_LABELS[family]}
+                    </span>
+                </div>
+                {released ? (
+                    <span className="typography-micro text-muted-foreground flex-shrink-0">
+                        {released}
+                    </span>
+                ) : null}
+                {isSelected && (
+                    <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />
+                )}
+            </div>
+        );
+    };
+
+    // Build the "Latest" quick-pick list from the server-provided latestByFamily.
+    // Each entry is the most recently released model in its family that is also
+    // available in the current provider list (so users can actually select it).
+    const latestItems = React.useMemo(() => {
+        const items: Array<{ family: LatestFamilyKey; entry: LatestFamilyModel; model: ProviderModel }> = [];
+        for (const family of LATEST_FAMILY_ORDER) {
+            const entry = latestByFamily[family];
+            if (!entry) continue;
+            if (allowedProviderSet && !allowedProviderSet.has(entry.providerId)) continue;
+            const provider = providers.find((p) => p.id === entry.providerId);
+            if (!provider) continue;
+            const providerModels = Array.isArray(provider.models) ? provider.models : [];
+            const model = providerModels.find((m: ProviderModel) => m?.id === entry.modelId);
+            if (!model) continue;
+            if (hiddenModels.some((h) => h.providerID === entry.providerId && h.modelID === entry.modelId)) continue;
+            items.push({ family, entry, model });
+        }
+        return items;
+    }, [latestByFamily, allowedProviderSet, providers, hiddenModels]);
+
+    const filteredLatest = latestItems.filter(({ family, entry, model }) => {
+        const modelName = getModelDisplayName(model as Record<string, unknown>) || entry.displayName;
+        return filterByQuery(modelName, LATEST_FAMILY_LABELS[family]);
+    });
+
     // Filter data for desktop dropdown
     const filteredFavorites = favoriteModelsList.filter(({ model, providerID }) => {
         if (allowedProviderSet && !allowedProviderSet.has(providerID)) {
@@ -254,7 +344,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         })
         .filter((provider) => provider.models.length > 0);
 
-    const hasResults = filteredFavorites.length > 0 || filteredRecents.length > 0 || filteredProviders.length > 0;
+    const hasResults = filteredLatest.length > 0 || filteredFavorites.length > 0 || filteredRecents.length > 0 || filteredProviders.length > 0;
 
     const renderMobileModelPanel = () => {
         if (!isActuallyMobile) return null;
@@ -266,6 +356,48 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 title="Select model"
             >
                 <div className="space-y-1">
+                    {/* Latest Section for Mobile */}
+                    {latestItems.length > 0 && (
+                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] mb-2">
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                <RiSparkling2Fill className="h-3.5 w-3.5 text-primary" />
+                                Latest
+                            </div>
+                            <div className="border-t border-border/20">
+                                {latestItems.map(({ family, entry, model }) => {
+                                    const isSelectedModel = entry.providerId === providerId && entry.modelId === modelId;
+                                    const released = formatReleasedAgo(entry.releaseDate);
+                                    const displayName = getModelDisplayName(model as Record<string, unknown>) || entry.displayName;
+                                    return (
+                                        <button
+                                            key={`latest-mobile-${family}`}
+                                            type="button"
+                                            className={cn(
+                                                'flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left typography-meta',
+                                                isSelectedModel ? 'bg-primary/10 text-primary' : 'text-foreground'
+                                            )}
+                                            onClick={() => {
+                                                handleProviderAndModelChange(entry.providerId, entry.modelId);
+                                                closeMobilePanel();
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <ProviderLogo providerId={family} className="h-3 w-3 flex-shrink-0" />
+                                                <span className="font-medium truncate">{displayName}</span>
+                                                <span className="typography-micro text-muted-foreground flex-shrink-0">
+                                                    {LATEST_FAMILY_LABELS[family]}
+                                                </span>
+                                            </div>
+                                            {released ? (
+                                                <span className="typography-micro text-muted-foreground flex-shrink-0">{released}</span>
+                                            ) : null}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Favorites Section for Mobile */}
                     {favoriteModelsList.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] mb-2">
@@ -537,7 +669,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             // Build flat list for keyboard navigation
                             type FlatModelItem = { model: ProviderModel; providerID: string; modelID: string; section: string };
                             const flatModelList: FlatModelItem[] = [];
-                            
+
+                            filteredLatest.forEach(({ entry, model }) => {
+                                flatModelList.push({ model, providerID: entry.providerId, modelID: entry.modelId, section: 'latest' });
+                            });
                             filteredFavorites.forEach(({ model, providerID, modelID }) => {
                                 flatModelList.push({ model, providerID, modelID, section: 'fav' });
                             });
@@ -628,9 +763,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                 </div>
                                             )}
 
+                                            {/* Latest Section — most recently released model per family */}
+                                            {filteredLatest.length > 0 && (
+                                                <>
+                                                    <DropdownMenuLabel style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
+                                                        <RiSparkling2Fill className="h-4 w-4 text-primary" />
+                                                        Latest
+                                                    </DropdownMenuLabel>
+                                                    {filteredLatest.map(({ family, entry, model }) => {
+                                                        const idx = currentFlatIndex++;
+                                                        return renderLatestRow(family, entry, model, idx, selectedIndex === idx);
+                                                    })}
+                                                </>
+                                            )}
+
                                             {/* Favorites Section */}
                                             {filteredFavorites.length > 0 && (
                                                 <>
+                                                    {filteredLatest.length > 0 && <DropdownMenuSeparator />}
                                                     <DropdownMenuLabel style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
                                                         <RiStarFill className="h-4 w-4 text-primary" />
                                                         Favorites
