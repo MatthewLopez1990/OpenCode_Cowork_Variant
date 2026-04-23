@@ -7,7 +7,14 @@
 #  and deploys sandbox rules.
 # ============================================================
 
-$ErrorActionPreference = "Stop"
+# PowerShell 5.1 raises NativeCommandError whenever a native tool (git, bun,
+# bunx, winget, electron-builder, curl, ...) writes ANYTHING to stderr under
+# 'Stop'. Progress messages like `git: Cloning into '...'` and `bun: Resolving
+# dependencies` are not errors but get treated as such. 'Continue' is the
+# right preference for a script that orchestrates native tools; critical
+# failures are still caught via try/catch and explicit exit-code/file checks
+# below.
+$ErrorActionPreference = "Continue"
 $COWORK_REPO = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
