@@ -24,6 +24,21 @@ function Write-Utf8NoBom($Path, $Content) {
     [System.IO.File]::WriteAllText($Path, $Content, $utf8)
 }
 
+# PowerShell 5.1 raises NativeCommandError when a native tool writes ANYTHING
+# to stderr under $ErrorActionPreference = 'Stop' - even harmless progress
+# messages like git's "Cloning into '...'". This helper runs git with the
+# preference temporarily relaxed so progress chatter doesn't kill the script,
+# and emits combined stdout+stderr so the caller can capture or ignore it.
+function Invoke-Git {
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & git @args 2>&1
+    } finally {
+        $ErrorActionPreference = $oldEap
+    }
+}
+
 Write-Host ""
 Write-Host "  +==========================================+" -ForegroundColor Blue
 Write-Host "  |  OpenCode Cowork - Enterprise Installer   |" -ForegroundColor Blue
@@ -155,18 +170,23 @@ Write-Host "Step 3: Building $APP_NAME..." -ForegroundColor White
 
 if (Test-Path "$BUILD_DIR\.git") {
     Set-Location $BUILD_DIR
-    $CURRENT_BRANCH = (git rev-parse --abbrev-ref HEAD 2>$null)
+    $CURRENT_BRANCH = (Invoke-Git rev-parse --abbrev-ref HEAD | Select-Object -First 1).ToString().Trim()
     if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
         Write-Host "  Existing build on '$CURRENT_BRANCH' - switching to '$COWORK_GIT_BRANCH'"
         Set-Location ..
         Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
-        git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+        Invoke-Git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
     } else {
-        git pull --ff-only 2>&1 | Out-Null
+        Invoke-Git pull --ff-only | Out-Null
     }
 } else {
     Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
-    git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+    Invoke-Git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
+}
+
+if (-not (Test-Path "$BUILD_DIR\.git")) {
+    Write-Host "  ! git clone failed - $BUILD_DIR has no .git directory. Aborting." -ForegroundColor Red
+    exit 1
 }
 
 Set-Location $BUILD_DIR
