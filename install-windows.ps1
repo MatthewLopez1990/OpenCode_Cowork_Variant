@@ -51,18 +51,11 @@ while ([string]::IsNullOrWhiteSpace($API_KEY)) {
     if ([string]::IsNullOrWhiteSpace($API_KEY)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-$DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "" }
-# Skip the default-model prompt when the GUI installer is driving us — step 4
-# auto-selects Claude Sonnet from the live OpenRouter catalog.
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL) -and -not $env:COWORK_GIT_BRANCH) {
-    $DEFAULT_MODEL = Read-Host "  Default model ID (Enter to auto-pick latest Claude Sonnet)"
-}
-
-$DEFAULT_MODEL_DISPLAY = if ($env:COWORK_DEFAULT_MODEL_DISPLAY) { $env:COWORK_DEFAULT_MODEL_DISPLAY } else { "" }
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY) -and -not $env:COWORK_APP_NAME -and -not [string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-    $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
-}
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
+# Default model is NEVER prompted — it's statically Claude Sonnet 4.6. Power
+# users can override by setting $env:COWORK_DEFAULT_MODEL before running this
+# script, or by editing %USERPROFILE%\.config\opencode\opencode.json after install.
+$DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "anthropic/claude-sonnet-4.6" }
+$DEFAULT_MODEL_DISPLAY = if ($env:COWORK_DEFAULT_MODEL_DISPLAY) { $env:COWORK_DEFAULT_MODEL_DISPLAY } else { "Claude Sonnet 4.6" }
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
 # in the UI using the APP_NAME so the end user sees the white-label brand,
@@ -330,10 +323,10 @@ try {
     Write-Warn "Could not auto-fetch models: $_"
 }
 
-# Final safety net — hardcoded fallback if nothing gave us a default.
+# Final safety net — force the static default if somehow still empty.
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-    $DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
-    $DEFAULT_MODEL_DISPLAY = "Claude Sonnet 4.5"
+    $DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
+    $DEFAULT_MODEL_DISPLAY = "Claude Sonnet 4.6"
 }
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
 

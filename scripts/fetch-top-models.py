@@ -25,9 +25,13 @@ OPENROUTER_URL = 'https://openrouter.ai/api/v1/models'
 FAMILIES = ['anthropic', 'openai', 'google']
 PER_FAMILY = 5
 FETCH_TIMEOUT = 15
-# Fallback when OpenRouter can't be reached during install.
-FALLBACK_DEFAULT_ID = 'anthropic/claude-sonnet-4.5'
-FALLBACK_DEFAULT_DISPLAY = 'Claude Sonnet 4.5'
+# The default model is STATIC — Claude Sonnet 4.6. We don't auto-discover the
+# "newest sonnet" because that can drift to a model that isn't yet production-
+# ready or that hasn't propagated to OpenRouter yet. If the fetch succeeds, we
+# still force the default to this ID (and guarantee it's in the loaded models
+# map). If the fetch fails, we fall back to just this one model.
+DEFAULT_MODEL_ID = 'anthropic/claude-sonnet-4.6'
+DEFAULT_MODEL_DISPLAY = 'Claude Sonnet 4.6'
 
 
 def make_entry(display_name):
@@ -78,18 +82,17 @@ def main():
 
     out_path = sys.argv[1]
     models = {}
-    default_id = FALLBACK_DEFAULT_ID
-    default_display = FALLBACK_DEFAULT_DISPLAY
 
     try:
         all_models = fetch_models()
     except Exception as error:  # noqa: BLE001 — best-effort during install
-        print(f'WARN: OpenRouter fetch failed ({error}); using fallback', file=sys.stderr)
-        models[default_id] = make_entry(default_display)
+        print(f'WARN: OpenRouter fetch failed ({error}); shipping static default only', file=sys.stderr)
+        # Guarantee the static default is present even if the API is down.
+        models[DEFAULT_MODEL_ID] = make_entry(DEFAULT_MODEL_DISPLAY)
         with open(out_path, 'w') as fh:
             json.dump({'models': models}, fh, indent=2)
-        print(f'DEFAULT_MODEL={default_id}')
-        print(f'DEFAULT_MODEL_DISPLAY={default_display}')
+        print(f'DEFAULT_MODEL={DEFAULT_MODEL_ID}')
+        print(f'DEFAULT_MODEL_DISPLAY={DEFAULT_MODEL_DISPLAY}')
         return 0
 
     by_family = pick_top(all_models)
@@ -103,31 +106,24 @@ def main():
             display = model.get('name') or model_id
             models[model_id] = make_entry(display)
 
-    # Default = newest Anthropic Claude Sonnet. Prefer one from the top 5 we
-    # already added; fall back to any sonnet in the full Anthropic list.
-    sonnet = None
-    for model in by_family['anthropic']:
-        model_id = model.get('id') or ''
-        if 'sonnet' in model_id.lower():
-            sonnet = model
-            break
-
-    if sonnet:
-        sonnet_id = sonnet.get('id')
-        sonnet_name = sonnet.get('name') or sonnet_id
-        if sonnet_id:
-            default_id = sonnet_id
-            default_display = sonnet_name
-            # Ensure the default is in the models map even if it wasn't top-5.
-            if sonnet_id not in models:
-                models[sonnet_id] = make_entry(sonnet_name)
+    # Force the default into the models map even if it wasn't in the top 5 of
+    # its family. This is the one model we KNOW the app needs to resolve, so we
+    # accept an extra entry to guarantee the picker's default state is valid.
+    if DEFAULT_MODEL_ID not in models:
+        # Try to find a richer display name from OpenRouter's catalog.
+        display = DEFAULT_MODEL_DISPLAY
+        for model in all_models:
+            if model.get('id') == DEFAULT_MODEL_ID:
+                display = model.get('name') or DEFAULT_MODEL_DISPLAY
+                break
+        models[DEFAULT_MODEL_ID] = make_entry(display)
 
     with open(out_path, 'w') as fh:
         json.dump({'models': models}, fh, indent=2)
 
-    print(f'OK: wrote {len(models)} models to {out_path} (default={default_id})', file=sys.stderr)
-    print(f'DEFAULT_MODEL={default_id}')
-    print(f'DEFAULT_MODEL_DISPLAY={default_display}')
+    print(f'OK: wrote {len(models)} models to {out_path} (default={DEFAULT_MODEL_ID})', file=sys.stderr)
+    print(f'DEFAULT_MODEL={DEFAULT_MODEL_ID}')
+    print(f'DEFAULT_MODEL_DISPLAY={DEFAULT_MODEL_DISPLAY}')
     return 0
 
 

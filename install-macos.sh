@@ -49,21 +49,12 @@ while [ -z "$API_KEY" ]; do
     [ -z "$API_KEY" ] && echo -e "${RED}Required.${NC}"
 done
 
-DEFAULT_MODEL="${COWORK_DEFAULT_MODEL:-}"
-# Skip the default-model prompt when the GUI installer is driving us (detected
-# by COWORK_GIT_BRANCH). The GUI no longer asks — step 4 auto-selects Claude
-# Sonnet as the default from the live OpenRouter catalog.
-if [ -z "$DEFAULT_MODEL" ] && [ -z "${COWORK_GIT_BRANCH:-}" ]; then
-    echo -ne "${YELLOW}Default model ID (Enter to auto-pick latest Claude Sonnet): ${NC}"
-    read -r DEFAULT_MODEL
-fi
-
-DEFAULT_MODEL_DISPLAY="${COWORK_DEFAULT_MODEL_DISPLAY:-}"
-if [ -z "$DEFAULT_MODEL_DISPLAY" ] && [ -z "${COWORK_APP_NAME:-}" ] && [ -n "$DEFAULT_MODEL" ]; then
-    echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
-    read -r DEFAULT_MODEL_DISPLAY
-fi
-[ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
+# Default model is NEVER prompted — it's statically Claude Sonnet 4.6 so nobody
+# has to pick one. Power users can override by exporting COWORK_DEFAULT_MODEL=<id>
+# before running this script, or by editing ~/.config/opencode/opencode.json
+# after install.
+DEFAULT_MODEL="${COWORK_DEFAULT_MODEL:-anthropic/claude-sonnet-4.6}"
+DEFAULT_MODEL_DISPLAY="${COWORK_DEFAULT_MODEL_DISPLAY:-Claude Sonnet 4.6}"
 
 # Backend is OpenRouter (hidden from the client). The provider is surfaced
 # in the UI using the APP_NAME so the end user sees the white-label brand,
@@ -282,10 +273,11 @@ if FETCH_OUTPUT=$(python3 "$COWORK_REPO_DIR/scripts/fetch-top-models.py" "$FETCH
     fi
 fi
 
-# Final safety net — if nothing gave us a default, use a hardcoded Claude Sonnet.
+# Final safety net — if somehow both init and fetch left us empty, force the
+# static default.
 if [ -z "$DEFAULT_MODEL" ]; then
-    DEFAULT_MODEL="anthropic/claude-sonnet-4.5"
-    DEFAULT_MODEL_DISPLAY="Claude Sonnet 4.5"
+    DEFAULT_MODEL="anthropic/claude-sonnet-4.6"
+    DEFAULT_MODEL_DISPLAY="Claude Sonnet 4.6"
 fi
 [ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
 
