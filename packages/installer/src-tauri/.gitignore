@@ -1,0 +1,8 @@
+# Tauri build outputs
+target/
+
+# Tauri-generated boilerplate (regenerated on each build)
+gen/
+
+# Bundler intermediate output
+WixTools/

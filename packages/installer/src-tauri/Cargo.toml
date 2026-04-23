@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[lib]
+name = "opencode_cowork_installer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+path = "src/lib.rs"
+
 [[bin]]
 name = "opencode-cowork-installer"
 path = "src/main.rs"
