@@ -1,0 +1,10 @@
+# Windows shell-native files MUST be CRLF on checkout everywhere.
+# PowerShell 5.1 (default on Windows) can fail to parse LF-only here-strings
+# at the closing "@ marker — keeping these CRLF avoids that pitfall.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Unix-native files stay LF regardless of what the user's git autocrlf is set to.
+*.sh text eol=lf
+*.py text eol=lf

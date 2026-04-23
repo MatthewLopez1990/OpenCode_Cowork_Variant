@@ -1,5 +1,5 @@
 # ============================================================
-#  OpenCode Cowork — Windows Installer (x64 + ARM64)
+#  OpenCode Cowork - Windows Installer (x64 + ARM64)
 #  White-label AI assistant for any enterprise
 #
 #  This is a self-contained fork. The installer clones THIS repo,
@@ -34,7 +34,7 @@ Write-Host ""
 # Step 1: Organization Setup
 # Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
 # COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
-# COWORK_LOGO_PATH) skips the corresponding prompt — used by the GUI installer
+# COWORK_LOGO_PATH) skips the corresponding prompt - used by the GUI installer
 # to run this script headlessly.
 Write-Host "Step 1: Organization Setup" -ForegroundColor White
 Write-Host ""
@@ -51,7 +51,7 @@ while ([string]::IsNullOrWhiteSpace($API_KEY)) {
     if ([string]::IsNullOrWhiteSpace($API_KEY)) { Write-Host "  Required." -ForegroundColor Red }
 }
 
-# Default model is NEVER prompted — it's statically Claude Sonnet 4.6. Power
+# Default model is NEVER prompted - it's statically Claude Sonnet 4.6. Power
 # users can override by setting $env:COWORK_DEFAULT_MODEL before running this
 # script, or by editing %USERPROFILE%\.config\opencode\opencode.json after install.
 $DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "anthropic/claude-sonnet-4.6" }
@@ -70,7 +70,7 @@ Write-Ok "Organization: $APP_NAME"
 Write-Ok "Provider (shown to users): $APP_NAME"
 Write-Ok "Model: $DEFAULT_MODEL"
 
-# Check for branding assets — env-var paths take precedence over \assets\
+# Check for branding assets - env-var paths take precedence over \assets\
 $ICON_ASSET = $null
 $LOGO_ASSET = $null
 if ($env:COWORK_ICON_PATH -and (Test-Path $env:COWORK_ICON_PATH)) {
@@ -90,12 +90,37 @@ Write-Host ""
 # Step 2: Prerequisites
 Write-Host "Step 2: Installing prerequisites..." -ForegroundColor White
 
+# Git discovery: scan every common install location, add to $env:PATH if found.
+# Covers: system-wide Git for Windows (winget/installer), WOW64 32-bit install,
+# per-user install to %LOCALAPPDATA%\Programs\Git, and scoop.
+$gitCandidateDirs = @(
+    "$env:ProgramFiles\Git\cmd",
+    "$env:ProgramFiles\Git\bin",
+    "${env:ProgramFiles(x86)}\Git\cmd",
+    "$env:LOCALAPPDATA\Programs\Git\cmd",
+    "$env:USERPROFILE\scoop\apps\git\current\cmd"
+)
+function Invoke-GitPathScan {
+    foreach ($p in $script:gitCandidateDirs) {
+        if ($p -and (Test-Path (Join-Path $p 'git.exe')) -and ($env:PATH -notlike "*$p*")) {
+            $env:PATH = "$p;$env:PATH"
+        }
+    }
+}
+Invoke-GitPathScan
+
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Git..."
     winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
-    $env:PATH = "$env:ProgramFiles\Git\cmd;$env:PATH"
+    # winget's symlink refresh doesn't reach this session, so re-scan.
+    Invoke-GitPathScan
 }
-Write-Ok "Git"
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "  ! Git is installed but not on PATH. Please restart your terminal or add Git's cmd directory to PATH, then re-run the installer." -ForegroundColor Red
+    exit 1
+}
+Write-Ok "Git ($((git --version 2>&1) -replace 'git version ',''))"
 
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Bun..."
@@ -132,7 +157,7 @@ if (Test-Path "$BUILD_DIR\.git") {
     Set-Location $BUILD_DIR
     $CURRENT_BRANCH = (git rev-parse --abbrev-ref HEAD 2>$null)
     if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
-        Write-Host "  Existing build on '$CURRENT_BRANCH' — switching to '$COWORK_GIT_BRANCH'"
+        Write-Host "  Existing build on '$CURRENT_BRANCH' - switching to '$COWORK_GIT_BRANCH'"
         Set-Location ..
         Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
         git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
@@ -323,7 +348,7 @@ try {
     Write-Warn "Could not auto-fetch models: $_"
 }
 
-# Final safety net — force the static default if somehow still empty.
+# Final safety net - force the static default if somehow still empty.
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
     $DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
     $DEFAULT_MODEL_DISPLAY = "Claude Sonnet 4.6"
@@ -437,7 +462,7 @@ Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
 
 Write-Ok "Default project: $DEFAULT_PROJECT"
 
-# Settings — MERGE with existing (don't destroy other app settings)
+# Settings - MERGE with existing (don't destroy other app settings)
 $PROJECT_UUID = [guid]::NewGuid().ToString()
 $PROJECT_TS = [long]([datetime]::UtcNow - [datetime]'1970-01-01').TotalMilliseconds
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
