@@ -50,18 +50,16 @@ while [ -z "$API_KEY" ]; do
 done
 
 DEFAULT_MODEL="${COWORK_DEFAULT_MODEL:-}"
-if [ -z "$DEFAULT_MODEL" ]; then
-    echo -ne "${YELLOW}Default model ID (e.g., 'anthropic/claude-sonnet-4.5'): ${NC}"
+# Skip the default-model prompt when the GUI installer is driving us (detected
+# by COWORK_GIT_BRANCH). The GUI no longer asks — step 4 auto-selects Claude
+# Sonnet as the default from the live OpenRouter catalog.
+if [ -z "$DEFAULT_MODEL" ] && [ -z "${COWORK_GIT_BRANCH:-}" ]; then
+    echo -ne "${YELLOW}Default model ID (Enter to auto-pick latest Claude Sonnet): ${NC}"
     read -r DEFAULT_MODEL
-    while [ -z "$DEFAULT_MODEL" ]; do
-        echo -e "${RED}Required. Browse models at https://openrouter.ai/models${NC}"
-        echo -ne "${YELLOW}Default model ID: ${NC}"
-        read -r DEFAULT_MODEL
-    done
 fi
 
 DEFAULT_MODEL_DISPLAY="${COWORK_DEFAULT_MODEL_DISPLAY:-}"
-if [ -z "$DEFAULT_MODEL_DISPLAY" ] && [ -z "${COWORK_APP_NAME:-}" ]; then
+if [ -z "$DEFAULT_MODEL_DISPLAY" ] && [ -z "${COWORK_APP_NAME:-}" ] && [ -n "$DEFAULT_MODEL" ]; then
     echo -ne "Default model display name (Enter for '$DEFAULT_MODEL'): "
     read -r DEFAULT_MODEL_DISPLAY
 fi
@@ -269,6 +267,28 @@ echo -e "${BOLD}Step 4: Configuring AI models...${NC}"
 OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 mkdir -p "$OPENCODE_CONFIG_DIR"
 
+# Auto-select the 5 newest models from Anthropic, OpenAI, and Google from
+# OpenRouter's catalog. Default model = newest Claude Sonnet. If the user set
+# COWORK_DEFAULT_MODEL explicitly, their choice wins.
+FETCHED_MODELS_FILE="$(mktemp -t cowork-models.XXXXXX.json)"
+echo -e "  Fetching newest Anthropic / OpenAI / Google models from OpenRouter..."
+if FETCH_OUTPUT=$(python3 "$COWORK_REPO_DIR/scripts/fetch-top-models.py" "$FETCHED_MODELS_FILE" 2>/dev/null); then
+    FETCHED_DEFAULT_MODEL=$(echo "$FETCH_OUTPUT" | grep '^DEFAULT_MODEL=' | head -1 | cut -d= -f2-)
+    FETCHED_DEFAULT_DISPLAY=$(echo "$FETCH_OUTPUT" | grep '^DEFAULT_MODEL_DISPLAY=' | head -1 | cut -d= -f2-)
+    # Only auto-override if the user didn't explicitly pin a model.
+    if [ -z "${COWORK_DEFAULT_MODEL:-}" ] && [ -n "$FETCHED_DEFAULT_MODEL" ]; then
+        DEFAULT_MODEL="$FETCHED_DEFAULT_MODEL"
+        DEFAULT_MODEL_DISPLAY="$FETCHED_DEFAULT_DISPLAY"
+    fi
+fi
+
+# Final safety net — if nothing gave us a default, use a hardcoded Claude Sonnet.
+if [ -z "$DEFAULT_MODEL" ]; then
+    DEFAULT_MODEL="anthropic/claude-sonnet-4.5"
+    DEFAULT_MODEL_DISPLAY="Claude Sonnet 4.5"
+fi
+[ -z "$DEFAULT_MODEL_DISPLAY" ] && DEFAULT_MODEL_DISPLAY="$DEFAULT_MODEL"
+
 # Create config from template. The OpenRouter baseURL is hardcoded in the
 # template itself; the provider key and display name come from the app name
 # so clients never see "OpenRouter" anywhere in the UI.
@@ -278,7 +298,30 @@ if [ -f "$TEMPLATE" ]; then
     cp "$OPENCODE_CONFIG_DIR/opencode.json" "$BUILD_DIR/opencode.json" 2>/dev/null || true
 fi
 
-# Merge extra models
+# Merge the 15 fetched models (top 5 per family) into the config.
+if [ -s "$FETCHED_MODELS_FILE" ]; then
+    python3 -c "
+import json, sys
+try:
+    with open('$OPENCODE_CONFIG_DIR/opencode.json') as f:
+        config = json.load(f)
+    with open('$FETCHED_MODELS_FILE') as f:
+        extra = json.load(f)
+    models = extra.get('models', {})
+    config['provider']['$PROVIDER_KEY']['models'].update(models)
+    with open('$OPENCODE_CONFIG_DIR/opencode.json', 'w') as f:
+        json.dump(config, f, indent=2)
+    cp_dst = '$BUILD_DIR/opencode.json'
+    with open(cp_dst, 'w') as f:
+        json.dump(config, f, indent=2)
+    print(f'  Loaded {len(models)} latest models from Anthropic / OpenAI / Google')
+except Exception as e:
+    print(f'  Note: {e}', file=sys.stderr)
+" 2>/dev/null || true
+fi
+rm -f "$FETCHED_MODELS_FILE" 2>/dev/null || true
+
+# Merge user-provided extras from config/models.json (optional, not in repo by default).
 MODELS_FILE="$COWORK_REPO_DIR/config/models.json"
 if [ -f "$MODELS_FILE" ]; then
     python3 -c "
@@ -295,7 +338,7 @@ try:
     cp_dst = '$BUILD_DIR/opencode.json'
     with open(cp_dst, 'w') as f:
         json.dump(config, f, indent=2)
-    print(f'  Added {len(models)} extra models')
+    print(f'  Merged {len(models)} extra models from config/models.json')
 except Exception as e:
     print(f'  Note: {e}', file=sys.stderr)
 " 2>/dev/null || true

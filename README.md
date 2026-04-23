@@ -33,17 +33,16 @@ Prebuilt binaries live in [`installers/`](installers/) on this branch and on the
 
 | Platform | File | Status |
 |----------|------|--------|
-| **macOS** (Apple Silicon, M1+) | [`installers/OpenCode Cowork Installer_0.1.0_aarch64.dmg`](installers/) | ✅ ready |
-| **macOS** (Intel) | `OpenCode Cowork Installer_0.1.0_x64.dmg` | ⏳ built by the `Build Installer` GitHub Action |
-| **Windows** (x64) | `OpenCode Cowork Installer_0.1.0_x64-setup.exe` | ⏳ built by the `Build Installer` GitHub Action — unsigned in v1, click "More info → Run anyway" on SmartScreen |
-| **Linux** (x64) | `OpenCode Cowork Installer_0.1.0_amd64.AppImage` | ⏳ built by the `Build Installer` GitHub Action — `chmod +x` then run |
+| **macOS** (Apple Silicon, M1+) | [`installers/ChatFortAI Cowork Installer_0.1.0_aarch64.dmg`](installers/) | ✅ ready |
+| **macOS** (Intel) | `ChatFortAI Cowork Installer_0.1.0_x64.dmg` | ⏳ built by the `Build Installer` GitHub Action |
+| **Windows** (x64) | `ChatFortAI Cowork Installer_0.1.0_x64-setup.exe` | ⏳ built by the `Build Installer` GitHub Action — unsigned in v1, click "More info → Run anyway" on SmartScreen |
+| **Linux** (x64) | `ChatFortAI Cowork Installer_0.1.0_amd64.AppImage` | ⏳ built by the `Build Installer` GitHub Action — `chmod +x` then run |
 
-The installer walks you through four steps:
+The installer walks you through three steps:
 
-1. **Branding** — type your app name, paste your OpenRouter API key, drag in your icon and logo PNGs (both optional).
-2. **Model** — the installer fetches OpenRouter's live model list and shows tabs for Anthropic, OpenAI, and Google with the newest model in each family pre-selected. Pick one, or switch to the **Custom** tab to paste any model ID.
-3. **Install** — watch the live log as the installer clones the repo, installs prerequisites, brands the app, and deploys everything. Finishes in 3–5 minutes.
-4. **Finish** — your branded app is installed and ready to launch from Applications (macOS), Start Menu (Windows), or your launcher (Linux).
+1. **Branding** — type your app name (defaults to **ChatFortAI Cowork**), paste your OpenRouter API key, drag in your icon and logo PNGs (both optional; ChatFortAI defaults are used if omitted).
+2. **Install** — watch the live log as the installer clones the repo, installs prerequisites, brands the app, and auto-loads the 5 newest models from Anthropic, OpenAI, and Google (Claude Sonnet becomes the starting default). Finishes in 3–5 minutes.
+3. **Finish** — your branded app is installed and ready to launch from Applications (macOS), Start Menu (Windows), or your launcher (Linux).
 
 **Note**: the GUI installer requires `git` on your PATH. On macOS, installing Xcode Command Line Tools (`xcode-select --install`) provides it; Windows and Linux installers install git automatically if missing.
 

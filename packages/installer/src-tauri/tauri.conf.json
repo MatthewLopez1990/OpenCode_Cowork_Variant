@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
-  "productName": "OpenCode Cowork Installer",
+  "productName": "ChatFortAI Cowork Installer",
   "version": "0.1.0",
-  "identifier": "com.cowork.installer",
+  "identifier": "ai.chatfort.cowork.installer",
   "build": {
     "beforeDevCommand": "bun run vite:dev",
     "beforeBuildCommand": "bun run vite:build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "OpenCode Cowork Installer",
+        "title": "ChatFortAI Cowork Installer",
         "width": 820,
         "height": 640,
         "minWidth": 720,

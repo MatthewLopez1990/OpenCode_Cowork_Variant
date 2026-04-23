@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "GUI installer for OpenCode Cowork — cross-platform executable wrapping the shell installers",
+  "description": "ChatFortAI Cowork Installer — cross-platform GUI wrapping the shell installers",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",

@@ -1,42 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import type { InstallPayload, LatestFamily, LogEvent, OpenRouterModel, StatusEvent } from './types';
+import type { InstallPayload, LogEvent, StatusEvent } from './types';
 
-type WizardStep = 'branding' | 'model' | 'install' | 'finish';
+type WizardStep = 'branding' | 'install' | 'finish';
 
-const FAMILY_LABELS: Record<LatestFamily, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
-};
-
-const FAMILY_ORDER: readonly LatestFamily[] = ['anthropic', 'openai', 'google'];
-
-function familyOf(modelId: string): LatestFamily | null {
-  if (modelId.startsWith('anthropic/')) return 'anthropic';
-  if (modelId.startsWith('openai/')) return 'openai';
-  if (modelId.startsWith('google/')) return 'google';
-  return null;
-}
+// Default name pre-filled in the App Name field. Users can override if they
+// want a different white-label brand.
+const DEFAULT_APP_NAME = 'ChatFortAI Cowork';
 
 export function App() {
   const [step, setStep] = useState<WizardStep>('branding');
-  const [appName, setAppName] = useState('');
+  const [appName, setAppName] = useState(DEFAULT_APP_NAME);
   const [apiKey, setApiKey] = useState('');
   const [iconPath, setIconPath] = useState<string | undefined>();
   const [logoPath, setLogoPath] = useState<string | undefined>();
-  const [defaultModel, setDefaultModel] = useState('');
-  const [defaultModelDisplay, setDefaultModelDisplay] = useState('');
 
   const canAdvanceBranding = appName.trim().length > 0 && apiKey.trim().length > 0;
-  const canAdvanceModel = defaultModel.trim().length > 0;
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>OpenCode Cowork Installer</h1>
+        <h1>ChatFortAI Cowork Installer</h1>
         <StepIndicator current={step} />
       </header>
       <main className="app-body">
@@ -52,21 +38,17 @@ export function App() {
             setLogoPath={setLogoPath}
           />
         )}
-        {step === 'model' && (
-          <ModelStep
-            defaultModel={defaultModel}
-            setDefaultModel={setDefaultModel}
-            defaultModelDisplay={defaultModelDisplay}
-            setDefaultModelDisplay={setDefaultModelDisplay}
-          />
-        )}
         {step === 'install' && (
           <InstallStep
             payload={{
               appName: appName.trim(),
               apiKey: apiKey.trim(),
-              defaultModel: defaultModel.trim(),
-              defaultModelDisplay: defaultModelDisplay.trim() || undefined,
+              // Model handling is automatic: the shell installer fetches the
+              // 5 newest Anthropic/OpenAI/Google models from OpenRouter and
+              // loads them all. These payload fields are kept for backward
+              // compatibility with the Rust command signature.
+              defaultModel: '',
+              defaultModelDisplay: undefined,
               iconPath,
               logoPath,
             }}
@@ -75,25 +57,16 @@ export function App() {
         )}
         {step === 'finish' && <FinishStep appName={appName} />}
       </main>
-      {step !== 'install' && step !== 'finish' && (
+      {step === 'branding' && (
         <footer className="app-footer">
-          {step !== 'branding' && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setStep(step === 'model' ? 'branding' : 'model')}
-            >
-              Back
-            </button>
-          )}
           <div className="spacer" />
           <button
             type="button"
             className="btn btn-primary"
-            disabled={step === 'branding' ? !canAdvanceBranding : !canAdvanceModel}
-            onClick={() => setStep(step === 'branding' ? 'model' : 'install')}
+            disabled={!canAdvanceBranding}
+            onClick={() => setStep('install')}
           >
-            {step === 'model' ? 'Install' : 'Continue'}
+            Install
           </button>
         </footer>
       )}
@@ -104,7 +77,6 @@ export function App() {
 function StepIndicator({ current }: { current: WizardStep }) {
   const steps: Array<{ key: WizardStep; label: string }> = [
     { key: 'branding', label: 'Branding' },
-    { key: 'model', label: 'Model' },
     { key: 'install', label: 'Install' },
     { key: 'finish', label: 'Finish' },
   ];
@@ -194,7 +166,9 @@ function BrandingStep(props: {
         />
       </div>
       <p className="muted small">
-        Assets are optional — defaults will be used if omitted.
+        Assets are optional — ChatFortAI defaults will be used if omitted. Models
+        are loaded automatically: the 5 newest from Anthropic, OpenAI, and Google,
+        with Claude Sonnet as the starting default.
       </p>
     </div>
   );
@@ -223,168 +197,6 @@ function AssetDrop(props: {
         <button type="button" className="btn btn-secondary" onClick={props.onPick}>
           Choose PNG…
         </button>
-      )}
-    </div>
-  );
-}
-
-function ModelStep(props: {
-  defaultModel: string;
-  setDefaultModel: (v: string) => void;
-  defaultModelDisplay: string;
-  setDefaultModelDisplay: (v: string) => void;
-}) {
-  const [models, setModels] = useState<OpenRouterModel[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeFamily, setActiveFamily] = useState<LatestFamily>('anthropic');
-  const [customMode, setCustomMode] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const resp = await fetch('https://openrouter.ai/api/v1/models', {
-          headers: { Accept: 'application/json' },
-        });
-        if (!resp.ok) throw new Error(`OpenRouter returned ${resp.status}`);
-        const json = (await resp.json()) as { data?: OpenRouterModel[] };
-        if (cancelled) return;
-        setModels(Array.isArray(json.data) ? json.data : []);
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const familyModels = useMemo(() => {
-    const result: Record<LatestFamily, OpenRouterModel[]> = {
-      anthropic: [],
-      openai: [],
-      google: [],
-    };
-    if (!models) return result;
-    for (const model of models) {
-      const fam = familyOf(model.id);
-      if (!fam) continue;
-      result[fam].push(model);
-    }
-    for (const fam of FAMILY_ORDER) {
-      result[fam].sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
-    }
-    return result;
-  }, [models]);
-
-  // Pre-select the latest model of the currently-focused family on first load
-  useEffect(() => {
-    if (props.defaultModel || !models) return;
-    for (const fam of FAMILY_ORDER) {
-      const first = familyModels[fam][0];
-      if (first) {
-        props.setDefaultModel(first.id);
-        props.setDefaultModelDisplay(first.name || first.id);
-        setActiveFamily(fam);
-        return;
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models]);
-
-  return (
-    <div className="step">
-      <h2>Pick the default model</h2>
-      <p className="muted">
-        End users can change this later. Models are fetched live from OpenRouter —
-        the newest of each family is pre-selected.
-      </p>
-
-      {error && (
-        <div className="alert alert-error">
-          Failed to load models: {error}. You can still enter a model ID by hand below.
-        </div>
-      )}
-
-      <div className="family-tabs">
-        {FAMILY_ORDER.map((fam) => (
-          <button
-            key={fam}
-            type="button"
-            className={`family-tab${activeFamily === fam && !customMode ? ' active' : ''}`}
-            onClick={() => {
-              setCustomMode(false);
-              setActiveFamily(fam);
-            }}
-          >
-            {FAMILY_LABELS[fam]}
-            <span className="family-count">{familyModels[fam].length}</span>
-          </button>
-        ))}
-        <button
-          type="button"
-          className={`family-tab${customMode ? ' active' : ''}`}
-          onClick={() => setCustomMode(true)}
-        >
-          Custom
-        </button>
-      </div>
-
-      {customMode ? (
-        <div className="custom-model">
-          <label className="field">
-            <span>Model ID</span>
-            <input
-              type="text"
-              value={props.defaultModel}
-              onChange={(e) => props.setDefaultModel(e.target.value)}
-              placeholder="anthropic/claude-sonnet-4.5"
-            />
-            <span className="field-hint">
-              Any model ID from openrouter.ai/models is valid.
-            </span>
-          </label>
-          <label className="field">
-            <span>Display name (optional)</span>
-            <input
-              type="text"
-              value={props.defaultModelDisplay}
-              onChange={(e) => props.setDefaultModelDisplay(e.target.value)}
-              placeholder="Defaults to the model ID"
-            />
-          </label>
-        </div>
-      ) : models === null && !error ? (
-        <div className="muted">Loading models from OpenRouter…</div>
-      ) : (
-        <div className="model-list">
-          {familyModels[activeFamily].length === 0 && (
-            <div className="muted">No {FAMILY_LABELS[activeFamily]} models found.</div>
-          )}
-          {familyModels[activeFamily].map((m) => {
-            const selected = m.id === props.defaultModel;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                className={`model-row${selected ? ' selected' : ''}`}
-                onClick={() => {
-                  props.setDefaultModel(m.id);
-                  props.setDefaultModelDisplay(m.name || m.id);
-                }}
-              >
-                <div className="model-main">
-                  <span className="model-name">{m.name || m.id}</span>
-                  <span className="model-id">{m.id}</span>
-                </div>
-                <div className="model-meta">
-                  {m.created ? new Date(m.created * 1000).toISOString().slice(0, 10) : ''}
-                </div>
-              </button>
-            );
-          })}
-        </div>
       )}
     </div>
   );

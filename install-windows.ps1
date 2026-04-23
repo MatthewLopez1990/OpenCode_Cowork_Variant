@@ -52,15 +52,14 @@ while ([string]::IsNullOrWhiteSpace($API_KEY)) {
 }
 
 $DEFAULT_MODEL = if ($env:COWORK_DEFAULT_MODEL) { $env:COWORK_DEFAULT_MODEL } else { "" }
-while ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-    $DEFAULT_MODEL = Read-Host "  Default model ID (e.g., 'anthropic/claude-sonnet-4.5')"
-    if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
-        Write-Host "  Required. Browse models at https://openrouter.ai/models" -ForegroundColor Red
-    }
+# Skip the default-model prompt when the GUI installer is driving us — step 4
+# auto-selects Claude Sonnet from the live OpenRouter catalog.
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL) -and -not $env:COWORK_GIT_BRANCH) {
+    $DEFAULT_MODEL = Read-Host "  Default model ID (Enter to auto-pick latest Claude Sonnet)"
 }
 
 $DEFAULT_MODEL_DISPLAY = if ($env:COWORK_DEFAULT_MODEL_DISPLAY) { $env:COWORK_DEFAULT_MODEL_DISPLAY } else { "" }
-if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY) -and -not $env:COWORK_APP_NAME) {
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY) -and -not $env:COWORK_APP_NAME -and -not [string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
     $DEFAULT_MODEL_DISPLAY = Read-Host "  Default model display name (Enter for '$DEFAULT_MODEL')"
 }
 if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
@@ -313,6 +312,31 @@ Write-Host "Step 4: Configuring AI models..." -ForegroundColor White
 $OPENCODE_CONFIG_DIR = "$env:USERPROFILE\.config\opencode"
 New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 
+# Auto-select the 5 newest models from Anthropic, OpenAI, and Google from
+# OpenRouter. Default = newest Claude Sonnet unless COWORK_DEFAULT_MODEL pins it.
+$FETCHED_MODELS_FILE = [System.IO.Path]::GetTempFileName() + '.json'
+Write-Host "  Fetching newest Anthropic / OpenAI / Google models from OpenRouter..."
+try {
+    $fetchOutput = python3 "$COWORK_REPO_DIR\scripts\fetch-top-models.py" $FETCHED_MODELS_FILE 2>$null
+    if ($LASTEXITCODE -eq 0 -and $fetchOutput) {
+        $fetchedDefault = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+        $fetchedDisplay = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL_DISPLAY=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+        if (-not $env:COWORK_DEFAULT_MODEL -and $fetchedDefault) {
+            $DEFAULT_MODEL = $fetchedDefault
+            $DEFAULT_MODEL_DISPLAY = $fetchedDisplay
+        }
+    }
+} catch {
+    Write-Warn "Could not auto-fetch models: $_"
+}
+
+# Final safety net — hardcoded fallback if nothing gave us a default.
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL)) {
+    $DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
+    $DEFAULT_MODEL_DISPLAY = "Claude Sonnet 4.5"
+}
+if ([string]::IsNullOrWhiteSpace($DEFAULT_MODEL_DISPLAY)) { $DEFAULT_MODEL_DISPLAY = $DEFAULT_MODEL }
+
 $TEMPLATE = "$COWORK_REPO_DIR\config\opencode.json.template"
 if (Test-Path $TEMPLATE) {
     $content = Get-Content $TEMPLATE -Raw
@@ -325,6 +349,28 @@ if (Test-Path $TEMPLATE) {
     # Also copy to build directory (OpenCode reads config from CWD)
     Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
     Write-Ok "AI models configured (default: $DEFAULT_MODEL)"
+}
+
+# Merge the 15 fetched models (top 5 per family) into the config.
+if (Test-Path $FETCHED_MODELS_FILE) {
+    try {
+        $config = Get-Content "$OPENCODE_CONFIG_DIR\opencode.json" -Raw | ConvertFrom-Json
+        $extra = Get-Content $FETCHED_MODELS_FILE -Raw | ConvertFrom-Json
+        $providerKey = $PROVIDER_NAME
+        if ($config.provider.PSObject.Properties[$providerKey]) {
+            $added = 0
+            foreach ($m in $extra.models.PSObject.Properties) {
+                $config.provider.$providerKey.models | Add-Member -MemberType NoteProperty -Name $m.Name -Value $m.Value -Force
+                $added++
+            }
+            Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\opencode.json" ($config | ConvertTo-Json -Depth 10)
+            Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
+            Write-Ok "Loaded $added latest models from Anthropic / OpenAI / Google"
+        }
+    } catch {
+        Write-Warn "Could not load fetched models: $_"
+    }
+    Remove-Item -Path $FETCHED_MODELS_FILE -Force -ErrorAction SilentlyContinue
 }
 
 # Merge extra models from config/models.json
