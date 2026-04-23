@@ -11,6 +11,9 @@ $ErrorActionPreference = "Stop"
 $COWORK_REPO = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
+# Which branch to build from. Defaults to main; the GUI installer overrides this
+# to the feature branch during pre-merge testing.
+$COWORK_GIT_BRANCH = if ($env:COWORK_GIT_BRANCH) { $env:COWORK_GIT_BRANCH } else { "main" }
 
 function Write-Ok($m) { Write-Host "  * $m" -ForegroundColor Green }
 function Write-Warn($m) { Write-Host "  ! $m" -ForegroundColor Yellow }
@@ -133,11 +136,20 @@ Write-Host ""
 # Step 3: Clone and build
 Write-Host "Step 3: Building $APP_NAME..." -ForegroundColor White
 
-if (Test-Path $BUILD_DIR) {
+if (Test-Path "$BUILD_DIR\.git") {
     Set-Location $BUILD_DIR
-    git pull 2>&1 | Out-Null
+    $CURRENT_BRANCH = (git rev-parse --abbrev-ref HEAD 2>$null)
+    if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
+        Write-Host "  Existing build on '$CURRENT_BRANCH' — switching to '$COWORK_GIT_BRANCH'"
+        Set-Location ..
+        Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+        git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+    } else {
+        git pull --ff-only 2>&1 | Out-Null
+    }
 } else {
-    git clone --depth 1 $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
+    Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+    git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR 2>&1 | Out-Null
 }
 
 Set-Location $BUILD_DIR

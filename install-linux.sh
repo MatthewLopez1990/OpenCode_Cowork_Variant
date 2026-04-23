@@ -20,6 +20,9 @@ NC='\033[0m'
 COWORK_REPO="https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
 COWORK_REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$HOME/.opencode-cowork-build"
+# Which branch to build from. Defaults to main; the GUI installer overrides this
+# to the feature branch during pre-merge testing.
+COWORK_GIT_BRANCH="${COWORK_GIT_BRANCH:-main}"
 
 echo ""
 echo -e "${BLUE}${BOLD}+==========================================+${NC}"
@@ -130,10 +133,20 @@ echo ""
 # -- Step 3: Clone, Brand, and Build --
 echo -e "${BOLD}Step 3: Building $APP_NAME...${NC}"
 
-if [ -d "$BUILD_DIR" ]; then
-    cd "$BUILD_DIR" && git pull 2>/dev/null || true
+if [ -d "$BUILD_DIR/.git" ]; then
+    cd "$BUILD_DIR"
+    CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+    if [ "$CURRENT_BRANCH" != "$COWORK_GIT_BRANCH" ]; then
+        echo -e "  Existing build on '$CURRENT_BRANCH' — switching to '$COWORK_GIT_BRANCH'"
+        cd ..
+        rm -rf "$BUILD_DIR"
+        git clone --depth 1 --branch "$COWORK_GIT_BRANCH" "$COWORK_REPO" "$BUILD_DIR"
+    else
+        git pull --ff-only 2>/dev/null || true
+    fi
 else
-    git clone --depth 1 "$COWORK_REPO" "$BUILD_DIR"
+    rm -rf "$BUILD_DIR"
+    git clone --depth 1 --branch "$COWORK_GIT_BRANCH" "$COWORK_REPO" "$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
 

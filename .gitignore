@@ -101,3 +101,4 @@ workspaces/
 
 # Branding (user provides their own)
 branding/
+.claude/

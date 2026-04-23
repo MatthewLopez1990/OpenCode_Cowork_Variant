@@ -8,6 +8,12 @@ use tokio::process::Command;
 
 const REPO_URL: &str = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git";
 const CLONE_DIR_NAME: &str = ".opencode-cowork-install";
+// Branch to clone from. Hardcoded to the feature branch while the GUI installer
+// is still under review — once merged to main, change this to "main" (or make
+// it configurable via an env var / build-time constant). The shell installer
+// scripts MUST exist on the referenced ref with non-interactive mode support,
+// otherwise the GUI can't drive them and falls back to blocking on stdin.
+const CLONE_BRANCH: &str = "feature/dynamic-models-and-gui-installer";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,32 +86,43 @@ async fn check_git_available() -> bool {
 async fn ensure_repo(app: &AppHandle) -> Result<PathBuf, String> {
     let clone_dir = home_dir()?.join(CLONE_DIR_NAME);
 
-    if clone_dir.join(".git").exists() {
-        emit_log(app, "system", format!("Updating existing clone at {}", clone_dir.display()));
-        let status = Command::new("git")
-            .args(["-C", clone_dir.to_string_lossy().as_ref(), "pull", "--ff-only"])
-            .status()
-            .await
-            .map_err(|e| format!("failed to run git pull: {e}"))?;
-        if !status.success() {
-            emit_log(app, "system", "git pull failed; continuing with existing clone");
+    // Always nuke any existing clone and fresh-clone the target branch. Shallow
+    // clones + mid-stream branch switches are a mess; a fresh 15 MB clone each
+    // run is the simpler, more reliable path.
+    if clone_dir.exists() {
+        emit_log(
+            app,
+            "system",
+            format!("Removing existing clone at {}", clone_dir.display()),
+        );
+        if let Err(e) = std::fs::remove_dir_all(&clone_dir) {
+            return Err(format!("failed to remove existing clone: {e}"));
         }
-    } else {
-        emit_log(app, "system", format!("Cloning {} to {}", REPO_URL, clone_dir.display()));
-        if let Some(parent) = clone_dir.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let status = Command::new("git")
-            .args(["clone", "--depth", "1", REPO_URL, clone_dir.to_string_lossy().as_ref()])
-            .status()
-            .await
-            .map_err(|e| format!("failed to run git clone: {e}"))?;
-        if !status.success() {
-            return Err(format!(
-                "git clone exited with status {}",
-                status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into())
-            ));
-        }
+    }
+    emit_log(
+        app,
+        "system",
+        format!("Cloning {} (branch {}) to {}", REPO_URL, CLONE_BRANCH, clone_dir.display()),
+    );
+    if let Some(parent) = clone_dir.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let status = Command::new("git")
+        .args([
+            "clone",
+            "--depth", "1",
+            "--branch", CLONE_BRANCH,
+            REPO_URL,
+            clone_dir.to_string_lossy().as_ref(),
+        ])
+        .status()
+        .await
+        .map_err(|e| format!("failed to run git clone: {e}"))?;
+    if !status.success() {
+        return Err(format!(
+            "git clone exited with status {}",
+            status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into())
+        ));
     }
 
     Ok(clone_dir)
@@ -173,6 +190,11 @@ async fn install_cowork(app: AppHandle, payload: InstallPayload) -> Result<i32, 
     cmd.env("COWORK_APP_NAME", &payload.app_name);
     cmd.env("COWORK_API_KEY", &payload.api_key);
     cmd.env("COWORK_DEFAULT_MODEL", &payload.default_model);
+    // Pin the app build to the same branch the installer itself was built from,
+    // so the installed app has all the feature-branch changes (Latest models,
+    // etc.) during pre-merge testing. After merge to main, CLONE_BRANCH flips
+    // to "main" and this env pass becomes a no-op.
+    cmd.env("COWORK_GIT_BRANCH", CLONE_BRANCH);
     if let Some(display) = payload.default_model_display.as_ref().filter(|s| !s.trim().is_empty()) {
         cmd.env("COWORK_DEFAULT_MODEL_DISPLAY", display);
     }
