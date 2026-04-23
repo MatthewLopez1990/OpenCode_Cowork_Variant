@@ -20,7 +20,12 @@ const CLONE_BRANCH: &str = "feature/dynamic-models-and-gui-installer";
 struct InstallPayload {
     app_name: String,
     api_key: String,
-    default_model: String,
+    // Model is no longer collected by the wizard — the shell installer
+    // hardcodes Claude Sonnet 4.6 and auto-loads the top 5 per family. These
+    // fields remain as optional overrides for power users invoking the Rust
+    // command directly (e.g. via custom tooling).
+    #[serde(default)]
+    default_model: Option<String>,
     #[serde(default)]
     default_model_display: Option<String>,
     #[serde(default)]
@@ -161,9 +166,9 @@ async fn install_cowork(app: AppHandle, payload: InstallPayload) -> Result<i32, 
     if payload.api_key.trim().is_empty() {
         return Err("API key is required".to_string());
     }
-    if payload.default_model.trim().is_empty() {
-        return Err("Default model is required".to_string());
-    }
+    // No default-model check — the shell installer picks Claude Sonnet 4.6
+    // as the static default and loads the 5 newest models per family from
+    // OpenRouter regardless of what we pass here.
 
     emit_status(&app, "checking-git", "Checking for git");
     if !check_git_available().await {
@@ -189,15 +194,20 @@ async fn install_cowork(app: AppHandle, payload: InstallPayload) -> Result<i32, 
     cmd.current_dir(&repo_dir);
     cmd.env("COWORK_APP_NAME", &payload.app_name);
     cmd.env("COWORK_API_KEY", &payload.api_key);
-    cmd.env("COWORK_DEFAULT_MODEL", &payload.default_model);
+    // Only forward COWORK_DEFAULT_MODEL when the caller explicitly pinned one.
+    // Otherwise leave it unset so the shell script's static Claude Sonnet 4.6
+    // default applies cleanly.
+    if let Some(model) = payload.default_model.as_ref().filter(|s| !s.trim().is_empty()) {
+        cmd.env("COWORK_DEFAULT_MODEL", model);
+    }
+    if let Some(display) = payload.default_model_display.as_ref().filter(|s| !s.trim().is_empty()) {
+        cmd.env("COWORK_DEFAULT_MODEL_DISPLAY", display);
+    }
     // Pin the app build to the same branch the installer itself was built from,
     // so the installed app has all the feature-branch changes (Latest models,
     // etc.) during pre-merge testing. After merge to main, CLONE_BRANCH flips
     // to "main" and this env pass becomes a no-op.
     cmd.env("COWORK_GIT_BRANCH", CLONE_BRANCH);
-    if let Some(display) = payload.default_model_display.as_ref().filter(|s| !s.trim().is_empty()) {
-        cmd.env("COWORK_DEFAULT_MODEL_DISPLAY", display);
-    }
     if let Some(icon) = payload.icon_path.as_ref().filter(|s| !s.trim().is_empty()) {
         cmd.env("COWORK_ICON_PATH", icon);
     }
