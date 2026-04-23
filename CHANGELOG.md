@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Installer: prepared `installer-v0.1.7` with release-tag based installs, synced package metadata, optional Windows Authenticode signing, and corrected cross-platform Word document instructions.
+
 ## [1.8.7] - 2026-03-13
 
 - CLI: fixed a startup regression in global npm/bun installs where wrapper or symlinked `openchamber` entrypoints could exit without output on commands like `--version` or `status`.

@@ -8,8 +8,6 @@ import {
     RiCommandLine,
     RiExternalLinkLine,
     RiFullscreenLine,
-    RiGitPullRequestLine,
-    RiGithubLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
 import { BrowserVoiceButton } from '@/components/voice';

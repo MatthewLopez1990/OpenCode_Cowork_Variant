@@ -8,12 +8,10 @@ use tokio::process::Command;
 
 const REPO_URL: &str = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git";
 const CLONE_DIR_NAME: &str = ".opencode-cowork-install";
-// Branch to clone from. Hardcoded to the feature branch while the GUI installer
-// is still under review — once merged to main, change this to "main" (or make
-// it configurable via an env var / build-time constant). The shell installer
-// scripts MUST exist on the referenced ref with non-interactive mode support,
-// otherwise the GUI can't drive them and falls back to blocking on stdin.
-const CLONE_BRANCH: &str = "feature/dynamic-models-and-gui-installer";
+
+fn clone_ref() -> &'static str {
+    option_env!("COWORK_INSTALLER_CLONE_REF").unwrap_or("main")
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,7 +105,7 @@ async fn ensure_repo(app: &AppHandle) -> Result<PathBuf, String> {
     emit_log(
         app,
         "system",
-        format!("Cloning {} (branch {}) to {}", REPO_URL, CLONE_BRANCH, clone_dir.display()),
+        format!("Cloning {} ({}) to {}", REPO_URL, clone_ref(), clone_dir.display()),
     );
     if let Some(parent) = clone_dir.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -116,7 +114,7 @@ async fn ensure_repo(app: &AppHandle) -> Result<PathBuf, String> {
         .args([
             "clone",
             "--depth", "1",
-            "--branch", CLONE_BRANCH,
+            "--branch", clone_ref(),
             REPO_URL,
             clone_dir.to_string_lossy().as_ref(),
         ])
@@ -203,11 +201,9 @@ async fn install_cowork(app: AppHandle, payload: InstallPayload) -> Result<i32, 
     if let Some(display) = payload.default_model_display.as_ref().filter(|s| !s.trim().is_empty()) {
         cmd.env("COWORK_DEFAULT_MODEL_DISPLAY", display);
     }
-    // Pin the app build to the same branch the installer itself was built from,
-    // so the installed app has all the feature-branch changes (Latest models,
-    // etc.) during pre-merge testing. After merge to main, CLONE_BRANCH flips
-    // to "main" and this env pass becomes a no-op.
-    cmd.env("COWORK_GIT_BRANCH", CLONE_BRANCH);
+    // Pin the app build to the same git ref the installer was compiled for.
+    // Release builds set this to the release tag; local/dev builds default to main.
+    cmd.env("COWORK_GIT_BRANCH", clone_ref());
     if let Some(icon) = payload.icon_path.as_ref().filter(|s| !s.trim().is_empty()) {
         cmd.env("COWORK_ICON_PATH", icon);
     }
