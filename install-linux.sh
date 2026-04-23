@@ -491,10 +491,4 @@ echo -e "  ${GREEN}*${NC} Directory sandbox"
 echo ""
 echo -e "  Default project: $DEFAULT_PROJECT"
 echo ""
-echo -ne "Launch now? (y/n): "
-read -r LAUNCH
-if [[ "$LAUNCH" =~ ^[Yy] ]]; then
-    nohup "$HOME/.local/bin/$APP_BIN_NAME" > /dev/null 2>&1 &
-    disown
-    echo -e "  ${GREEN}$APP_NAME is running. You can close this terminal.${NC}"
-fi
+echo -e "${GREEN}Done.${NC} Launch $APP_NAME from your applications menu."

@@ -412,11 +412,4 @@ echo -e "  ${GREEN}*${NC} Directory sandbox"
 echo ""
 echo -e "  Default project: $DEFAULT_PROJECT"
 echo ""
-echo -ne "Launch now? (y/n): "
-read -r LAUNCH
-if [[ "$LAUNCH" =~ ^[Yy] ]]; then
-    if [ -d "/Applications/$APP_NAME.app" ]; then
-        open "/Applications/$APP_NAME.app"
-        echo -e "  ${GREEN}$APP_NAME is running.${NC}"
-    fi
-fi
+echo -e "${GREEN}Done.${NC} Launch $APP_NAME from your Applications folder or Dock."

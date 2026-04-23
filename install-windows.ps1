@@ -497,10 +497,4 @@ Write-Host "  * Legal + Finance commands" -ForegroundColor Green
 Write-Host "  * Directory sandbox (hidden CLAUDE.md)" -ForegroundColor Green
 Write-Host ""
 
-$launch = Read-Host "  Launch now? (y/n)"
-if ($launch -match "^[Yy]") {
-    if (Test-Path "$INSTALL_DIR\$EXE_NAME") {
-        Start-Process -FilePath "$INSTALL_DIR\$EXE_NAME" -WorkingDirectory $INSTALL_DIR -WindowStyle Normal
-        Write-Host "  $APP_NAME is running. You can close this terminal." -ForegroundColor Green
-    }
-}
+Write-Host "Done. Launch $APP_NAME from your Start Menu." -ForegroundColor Green
