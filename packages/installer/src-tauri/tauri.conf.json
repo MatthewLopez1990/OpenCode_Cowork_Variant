@@ -43,7 +43,7 @@
       "minimumSystemVersion": "13.0"
     },
     "windows": {
-      "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/sign-windows.ps1 %1",
+      "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../../scripts/sign-windows.ps1 %1",
       "nsis": {
         "installMode": "currentUser"
       }
