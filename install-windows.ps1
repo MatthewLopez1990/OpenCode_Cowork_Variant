@@ -90,12 +90,37 @@ Write-Host ""
 # Step 2: Prerequisites
 Write-Host "Step 2: Installing prerequisites..." -ForegroundColor White
 
+# Git discovery: scan every common install location, add to $env:PATH if found.
+# Covers: system-wide Git for Windows (winget/installer), WOW64 32-bit install,
+# per-user install to %LOCALAPPDATA%\Programs\Git, and scoop.
+$gitCandidateDirs = @(
+    "$env:ProgramFiles\Git\cmd",
+    "$env:ProgramFiles\Git\bin",
+    "${env:ProgramFiles(x86)}\Git\cmd",
+    "$env:LOCALAPPDATA\Programs\Git\cmd",
+    "$env:USERPROFILE\scoop\apps\git\current\cmd"
+)
+function Invoke-GitPathScan {
+    foreach ($p in $script:gitCandidateDirs) {
+        if ($p -and (Test-Path (Join-Path $p 'git.exe')) -and ($env:PATH -notlike "*$p*")) {
+            $env:PATH = "$p;$env:PATH"
+        }
+    }
+}
+Invoke-GitPathScan
+
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Git..."
     winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
-    $env:PATH = "$env:ProgramFiles\Git\cmd;$env:PATH"
+    # winget's symlink refresh doesn't reach this session, so re-scan.
+    Invoke-GitPathScan
 }
-Write-Ok "Git"
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "  ! Git is installed but not on PATH. Please restart your terminal or add Git's cmd directory to PATH, then re-run the installer." -ForegroundColor Red
+    exit 1
+}
+Write-Ok "Git ($((git --version 2>&1) -replace 'git version ',''))"
 
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Bun..."
