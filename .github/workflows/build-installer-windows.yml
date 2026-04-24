@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to attach the Windows artifact to, e.g. installer-v0.1.7.'
+        description: 'Release tag to attach the Windows artifact to, e.g. installer-v0.1.8.'
         required: true
         type: string
       clone_ref:

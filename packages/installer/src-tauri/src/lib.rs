@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-const REPO_URL: &str = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git";
+const REPO_URL: &str = "https://github.com/MatthewLopez1990/ChatFortAI-Cowork.git";
 const CLONE_DIR_NAME: &str = ".opencode-cowork-install";
 
 fn clone_ref() -> &'static str {

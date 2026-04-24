@@ -4,10 +4,10 @@ Drop-in, double-click installers for end users who don't want to touch a termina
 
 | File | Platform | Architecture |
 |------|----------|--------------|
-| `ChatFortAI.Cowork.Installer_0.1.7_aarch64.dmg` | macOS | Apple Silicon (M1 and newer) |
-| `ChatFortAI.Cowork.Installer_0.1.7_x64.dmg` | macOS | Intel |
-| `ChatFortAI.Cowork.Installer_0.1.7_x64-setup.exe` | Windows | x64 |
-| `ChatFortAI.Cowork.Installer_0.1.7_amd64.AppImage` | Linux | x64 |
+| `ChatFortAI.Cowork.Installer_0.1.8_aarch64.dmg` | macOS | Apple Silicon (M1 and newer) |
+| `ChatFortAI.Cowork.Installer_0.1.8_x64.dmg` | macOS | Intel |
+| `ChatFortAI.Cowork.Installer_0.1.8_x64-setup.exe` | Windows | x64 |
+| `ChatFortAI.Cowork.Installer_0.1.8_amd64.AppImage` | Linux | x64 |
 
 ## How to use
 

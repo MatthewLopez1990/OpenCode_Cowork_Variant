@@ -15,7 +15,7 @@
 # failures are still caught via try/catch and explicit exit-code/file checks
 # below.
 $ErrorActionPreference = "Continue"
-$COWORK_REPO = "https://github.com/MatthewLopez1990/OpenCode_Cowork_Variant.git"
+$COWORK_REPO = "https://github.com/MatthewLopez1990/ChatFortAI-Cowork.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
 # Which branch to build from. Defaults to main; the GUI installer overrides this
@@ -43,6 +43,69 @@ function Invoke-Git {
         & git @args 2>&1
     } finally {
         $ErrorActionPreference = $oldEap
+    }
+}
+
+function Invoke-NativeTool {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [string[]]$ArgumentList = @(),
+
+        [int]$Tail = 0,
+
+        [string]$MatchPattern = ""
+    )
+
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $process = Start-Process `
+            -FilePath $FilePath `
+            -ArgumentList $ArgumentList `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $output = @()
+        if (Test-Path $stdoutPath) {
+            $output += Get-Content $stdoutPath -ErrorAction SilentlyContinue
+        }
+        if (Test-Path $stderrPath) {
+            $output += Get-Content $stderrPath -ErrorAction SilentlyContinue
+        }
+
+        $displayOutput = $output
+        if (-not [string]::IsNullOrWhiteSpace($MatchPattern)) {
+            $displayOutput = $output | Select-String -Pattern $MatchPattern | ForEach-Object { $_.Line }
+        }
+
+        if ($Tail -gt 0) {
+            $displayOutput | Select-Object -Last $Tail | ForEach-Object {
+                if ($null -ne $_) { Write-Host $_ }
+            }
+        } elseif ($displayOutput.Count -gt 0) {
+            $displayOutput | ForEach-Object {
+                if ($null -ne $_) { Write-Host $_ }
+            }
+        }
+
+        if ($process.ExitCode -ne 0) {
+            Write-Host "  ! $FilePath failed with exit code $($process.ExitCode)" -ForegroundColor Red
+            $output | Select-Object -Last 40 | ForEach-Object {
+                if ($null -ne $_) { Write-Host "    $_" }
+            }
+            exit $process.ExitCode
+        }
+    } finally {
+        $ErrorActionPreference = $oldEap
+        Remove-Item $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -290,18 +353,18 @@ Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NA
 
 # Install and build
 Write-Host "  Adding Electron dependencies..."
-bun add --dev electron@latest electron-builder@24.13.3 electron-store@latest electron-context-menu@latest 2>&1 | Select-Object -Last 1
+Invoke-NativeTool -FilePath "bun" -ArgumentList @("add", "--dev", "electron@latest", "electron-builder@24.13.3", "electron-store@latest", "electron-context-menu@latest") -Tail 1
 Write-Host "  Installing all dependencies..."
-bun install 2>&1 | Select-Object -Last 1
+Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 1
 Write-Host "  Building frontend..."
-bun run build:web 2>&1 | Select-Object -Last 3
+Invoke-NativeTool -FilePath "bun" -ArgumentList @("run", "build:web") -Tail 3
 Write-Ok "Frontend built"
 
 # Build Electron
 Write-Host "  Packaging desktop app..."
 if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
 if (-not (Test-Path "$BUILD_DIR\branding\icon.png")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null; New-Item "$BUILD_DIR\branding\icon.png" -ItemType File -Force | Out-Null }
-bunx electron-builder --config electron-builder.json --win --x64 2>&1 | Select-String -Pattern "(building|packaging|target=)" | Select-Object -Last 5
+Invoke-NativeTool -FilePath "bunx" -ArgumentList @("electron-builder", "--config", "electron-builder.json", "--win", "--x64") -MatchPattern "(building|packaging|target=)" -Tail 5
 
 $EXE_NAME = "$APP_NAME.exe"
 $INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"
