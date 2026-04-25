@@ -50,6 +50,44 @@ function Write-InstallerLine {
 function Write-Ok($m) { Write-InstallerLine "  * $m" "Green" }
 function Write-Warn($m) { Write-InstallerLine "  ! $m" "Yellow" }
 
+$script:CURRENT_STAGE = "startup"
+
+function Set-InstallStage($Name) {
+    $script:CURRENT_STAGE = $Name
+    Write-InstallLog "STAGE: $Name"
+}
+
+function Fail-Install {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+
+        [int]$Code = 1,
+
+        [object[]]$Details = @()
+    )
+
+    Write-InstallerLine "INSTALLER_FAILURE_STAGE=$script:CURRENT_STAGE" "Red"
+    Write-InstallerLine "INSTALLER_FAILURE_MESSAGE=$Message" "Red"
+    Write-InstallerLine "INSTALLER_FAILURE_LOG=$script:INSTALL_LOG" "Red"
+
+    if ($Details.Count -gt 0) {
+        Write-InstallerLine "INSTALLER_FAILURE_DETAILS_BEGIN" "Red"
+        $Details | Select-Object -Last 80 | ForEach-Object {
+            if ($null -ne $_) { Write-InstallerLine ($_.ToString()) "Red" }
+        }
+        Write-InstallerLine "INSTALLER_FAILURE_DETAILS_END" "Red"
+    }
+
+    Write-InstallerLine "  ! $Message" "Red"
+    Write-InstallerLine "  ! Full diagnostic log: $script:INSTALL_LOG" "Red"
+    exit $Code
+}
+
+trap {
+    Fail-Install "Unexpected PowerShell error: $($_.Exception.Message)" 1 @($_.ScriptStackTrace)
+}
+
 # Write UTF-8 WITHOUT BOM
 function Write-Utf8NoBom($Path, $Content) {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -69,6 +107,28 @@ function Invoke-Git {
     } finally {
         $ErrorActionPreference = $oldEap
     }
+}
+
+function Invoke-GitChecked {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Description,
+
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$GitArgs
+    )
+
+    $output = @(Invoke-Git @GitArgs)
+    foreach ($line in $output) {
+        if ($null -ne $line) { Write-InstallLog "[git] $line" }
+    }
+
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        Fail-Install "$Description failed (git exit code $exitCode)" $exitCode $output
+    }
+
+    return $output
 }
 
 function Invoke-NativeTool {
@@ -93,8 +153,7 @@ function Invoke-NativeTool {
     try {
         $command = Get-Command $FilePath -ErrorAction SilentlyContinue
         if (-not $command) {
-            Write-InstallerLine "  ! Required command not found: $FilePath" "Red"
-            exit 127
+            Fail-Install "Required command not found: $FilePath" 127
         }
 
         Write-InstallLog "Running native command: $FilePath $($ArgumentList -join ' ')"
@@ -136,12 +195,7 @@ function Invoke-NativeTool {
         }
 
         if ($exitCode -ne 0) {
-            Write-InstallerLine "  ! $FilePath failed with exit code $exitCode" "Red"
-            Write-InstallerLine "  ! Full diagnostic log: $script:INSTALL_LOG" "Red"
-            $output | Select-Object -Last 80 | ForEach-Object {
-                if ($null -ne $_) { Write-InstallerLine "    $_" }
-            }
-            exit $exitCode
+            Fail-Install "$FilePath failed with exit code $exitCode" $exitCode $output
         }
     } finally {
         $ErrorActionPreference = $oldEap
@@ -162,6 +216,7 @@ Write-InstallerLine "  Diagnostic log: $INSTALL_LOG"
 # COWORK_DEFAULT_MODEL, COWORK_DEFAULT_MODEL_DISPLAY, COWORK_ICON_PATH,
 # COWORK_LOGO_PATH) skips the corresponding prompt - used by the GUI installer
 # to run this script headlessly.
+Set-InstallStage "collecting-organization-settings"
 Write-Host "Step 1: Organization Setup" -ForegroundColor White
 Write-Host ""
 
@@ -214,6 +269,7 @@ if ($LOGO_ASSET) { Write-Ok "Logo: $($LOGO_ASSET.Name)" } else { Write-Host "  -
 Write-Host ""
 
 # Step 2: Prerequisites
+Set-InstallStage "checking-prerequisites"
 Write-Host "Step 2: Installing prerequisites..." -ForegroundColor White
 
 # Git discovery: scan every common install location, add to $env:PATH if found.
@@ -237,21 +293,27 @@ Invoke-GitPathScan
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Git..."
-    winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+    Invoke-NativeTool -FilePath "winget" -ArgumentList @("install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements") -Live
     # winget's symlink refresh doesn't reach this session, so re-scan.
     Invoke-GitPathScan
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "  ! Git is installed but not on PATH. Please restart your terminal or add Git's cmd directory to PATH, then re-run the installer." -ForegroundColor Red
-    exit 1
+    Fail-Install "Git is installed but not on PATH. Restart the terminal or add Git's cmd directory to PATH, then re-run the installer."
 }
 Write-Ok "Git ($((git --version 2>&1) -replace 'git version ',''))"
 
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     Write-Warn "Installing Bun..."
-    irm https://bun.sh/install.ps1 | iex
-    $env:PATH = "$env:USERPROFILE\.bun\bin;$env:PATH"
+    try {
+        irm https://bun.sh/install.ps1 -ErrorAction Stop | iex
+        $env:PATH = "$env:USERPROFILE\.bun\bin;$env:PATH"
+    } catch {
+        Fail-Install "Bun installation failed: $($_.Exception.Message)" 1 @($_.ScriptStackTrace)
+    }
+}
+if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    Fail-Install "Bun was installed or requested but is still not available on PATH."
 }
 Write-Ok "Bun $(bun --version 2>&1)"
 
@@ -263,46 +325,52 @@ Remove-Item "$env:USERPROFILE\.opencode\bin\opencode.cmd" -Force -ErrorAction Si
 Remove-Item "$env:USERPROFILE\.opencode\bin\opencode.real.exe" -Force -ErrorAction SilentlyContinue
 Write-Host "  Installing OpenCode CLI (latest)..."
 if ($true) {
+    Set-InstallStage "installing-opencode-cli"
     $ocArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") { "arm64" } else { "x64" }
     $ocUrl = "https://github.com/anomalyco/opencode/releases/latest/download/opencode-windows-${ocArch}.zip"
     $ocZip = "$env:TEMP\opencode.zip"
     $ocDir = "$env:USERPROFILE\.opencode\bin"
-    New-Item -ItemType Directory -Force -Path $ocDir | Out-Null
-    Invoke-WebRequest -Uri $ocUrl -OutFile $ocZip
-    Expand-Archive -Path $ocZip -DestinationPath $ocDir -Force
-    Remove-Item $ocZip -ErrorAction SilentlyContinue
+    try {
+        New-Item -ItemType Directory -Force -Path $ocDir -ErrorAction Stop | Out-Null
+        Invoke-WebRequest -Uri $ocUrl -OutFile $ocZip -ErrorAction Stop
+        Expand-Archive -Path $ocZip -DestinationPath $ocDir -Force -ErrorAction Stop
+        Remove-Item $ocZip -ErrorAction SilentlyContinue
+    } catch {
+        Fail-Install "OpenCode CLI download or extraction failed: $($_.Exception.Message)" 1 @("URL: $ocUrl", "Destination: $ocDir", $_.ScriptStackTrace)
+    }
     $env:PATH = "$ocDir;$env:PATH"
 }
 Write-Ok "OpenCode CLI"
 Write-Host ""
 
 # Step 3: Clone and build
+Set-InstallStage "cloning-application-source"
 Write-Host "Step 3: Building $APP_NAME..." -ForegroundColor White
 
 if (Test-Path "$BUILD_DIR\.git") {
     Set-Location $BUILD_DIR
-    $CURRENT_BRANCH = (Invoke-Git rev-parse --abbrev-ref HEAD | Select-Object -First 1).ToString().Trim()
+    $CURRENT_BRANCH = (Invoke-GitChecked "Read existing build branch" rev-parse --abbrev-ref HEAD | Select-Object -First 1).ToString().Trim()
     if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
         Write-Host "  Existing build on '$CURRENT_BRANCH' - switching to '$COWORK_GIT_BRANCH'"
         Set-Location ..
         Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
-        Invoke-Git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
+        Invoke-GitChecked "Clone application source" clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
     } else {
-        Invoke-Git pull --ff-only | Out-Null
+        Invoke-GitChecked "Update existing application source" pull --ff-only | Out-Null
     }
 } else {
     Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
-    Invoke-Git clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
+    Invoke-GitChecked "Clone application source" clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
 }
 
 if (-not (Test-Path "$BUILD_DIR\.git")) {
-    Write-Host "  ! git clone failed - $BUILD_DIR has no .git directory. Aborting." -ForegroundColor Red
-    exit 1
+    Fail-Install "Git clone did not create $BUILD_DIR\.git."
 }
 
 Set-Location $BUILD_DIR
 
 # Copy Electron config
+Set-InstallStage "preparing-branded-source"
 Write-Host "  Applying Electron configuration..."
 if (-not (Test-Path "$BUILD_DIR\electron")) { New-Item -ItemType Directory -Force -Path "$BUILD_DIR\electron" | Out-Null }
 Copy-Item "$COWORK_REPO_DIR\electron\main.cjs" "$BUILD_DIR\electron\main.cjs" -Force
@@ -393,15 +461,18 @@ function ensureSandboxRules(directory) {
 Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NAME`",`"provider`":`"$PROVIDER_DISPLAY`"}"
 
 # Install and build
+Set-InstallStage "installing-build-dependencies"
 Write-Host "  Adding Electron dependencies..."
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("add", "--dev", "electron@latest", "electron-builder@24.13.3", "electron-store@latest", "electron-context-menu@latest") -Tail 1
 Write-Host "  Installing all dependencies..."
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 1
 Write-Host "  Building frontend..."
+Set-InstallStage "building-web-frontend"
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("run", "build:web") -Tail 3
 Write-Ok "Frontend built"
 
 # Build Electron
+Set-InstallStage "packaging-desktop-app"
 Write-Host "  Packaging desktop app..."
 Write-InstallerLine "  Electron Builder can spend several minutes downloading Windows packaging tools. Live output will continue below."
 if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
@@ -418,14 +489,25 @@ if (-not (Test-Path $UNPACKED_EXE)) {
     $UNPACKED_EXE = "$UNPACKED\$EXE_NAME"
 }
 
-if (Test-Path $UNPACKED_EXE) {
-    if (Test-Path $INSTALL_DIR) { Remove-Item -Recurse -Force $INSTALL_DIR }
-    Copy-Item -Recurse $UNPACKED $INSTALL_DIR
+if (-not (Test-Path $UNPACKED_EXE)) {
+    $bundleRoot = "$BUILD_DIR\electron-dist"
+    $bundleFiles = @()
+    if (Test-Path $bundleRoot) {
+        $bundleFiles = Get-ChildItem $bundleRoot -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 120 -ExpandProperty FullName
+    }
+    Fail-Install "Electron Builder finished but did not produce the expected executable: $UNPACKED_EXE" 1 $bundleFiles
+}
+
+Set-InstallStage "installing-desktop-app"
+try {
+    if (Test-Path $INSTALL_DIR) { Remove-Item -Recurse -Force $INSTALL_DIR -ErrorAction Stop }
+    Copy-Item -Recurse $UNPACKED $INSTALL_DIR -ErrorAction Stop
 
     $ICON_PATH = "$BUILD_DIR\packages\desktop\src-tauri\icons\icon.ico"
     if (-not (Test-Path $ICON_PATH)) { $ICON_PATH = "$INSTALL_DIR\$EXE_NAME" }
 
-    $WshShell = New-Object -ComObject WScript.Shell
+    $WshShell = New-Object -ComObject WScript.Shell -ErrorAction Stop
     $StartMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
     $Shortcut = $WshShell.CreateShortcut("$StartMenu\$APP_NAME.lnk")
     $Shortcut.TargetPath = "$INSTALL_DIR\$EXE_NAME"
@@ -451,12 +533,13 @@ if (Test-Path $UNPACKED_EXE) {
         $env:PATH = "$INSTALL_DIR;$env:PATH"
     }
     Write-Ok "$APP_NAME installed to $INSTALL_DIR"
-} else {
-    Write-Warn "Build produced no executable. You can still run: opencode web"
+} catch {
+    Fail-Install "Desktop app copy, shortcut creation, or PATH setup failed: $($_.Exception.Message)" 1 @("Install dir: $INSTALL_DIR", "Unpacked dir: $UNPACKED", "Executable: $UNPACKED_EXE", $_.ScriptStackTrace)
 }
 Write-Host ""
 
 # Step 4: Configure AI models
+Set-InstallStage "configuring-ai-models"
 Write-Host "Step 4: Configuring AI models..." -ForegroundColor White
 
 $OPENCODE_CONFIG_DIR = "$env:USERPROFILE\.config\opencode"
@@ -499,6 +582,8 @@ if (Test-Path $TEMPLATE) {
     # Also copy to build directory (OpenCode reads config from CWD)
     Copy-Item "$OPENCODE_CONFIG_DIR\opencode.json" "$BUILD_DIR\opencode.json" -Force -ErrorAction SilentlyContinue
     Write-Ok "AI models configured (default: $DEFAULT_MODEL)"
+} else {
+    Fail-Install "Required OpenCode config template is missing: $TEMPLATE"
 }
 
 # Merge the 15 fetched models (top 5 per family) into the config.
@@ -547,18 +632,27 @@ if (Test-Path $MODELS_FILE) {
 }
 
 # Install npm provider SDK
+Set-InstallStage "installing-provider-sdk"
 $pkgJsonContent = '{ "dependencies": { "@ai-sdk/openai-compatible": "latest", "@opencode-ai/plugin": "1.2.27" } }'
 Write-Utf8NoBom "$OPENCODE_CONFIG_DIR\package.json" $pkgJsonContent
-Push-Location $OPENCODE_CONFIG_DIR
-bun install 2>&1 | Out-Null
-Pop-Location
+$providerLocationPushed = $false
+try {
+    Push-Location $OPENCODE_CONFIG_DIR -ErrorAction Stop
+    $providerLocationPushed = $true
+    Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
+} finally {
+    if ($providerLocationPushed) {
+        Pop-Location -ErrorAction SilentlyContinue
+    }
+}
 if (Test-Path "$OPENCODE_CONFIG_DIR\node_modules\@ai-sdk") {
     Write-Ok "AI provider SDK installed"
 } else {
-    Write-Warn "SDK install may have failed -- will retry on first launch"
+    Fail-Install "AI provider SDK install completed without creating $OPENCODE_CONFIG_DIR\node_modules\@ai-sdk."
 }
 
 # Legal + Finance commands
+Set-InstallStage "installing-commands-and-rules"
 foreach ($CMD_TYPE in @("legal", "finance")) {
     $CMDS_SRC = "$COWORK_REPO_DIR\commands\$CMD_TYPE"
     if (Test-Path $CMDS_SRC) {
@@ -595,6 +689,7 @@ Copy-Item $CLAUDE_SRC "$sandboxDir\CLAUDE.md.template" -Force
 Write-Ok "Default project: $DEFAULT_PROJECT"
 
 # Settings - MERGE with existing (don't destroy other app settings)
+Set-InstallStage "writing-application-settings"
 $PROJECT_UUID = [guid]::NewGuid().ToString()
 $PROJECT_TS = [long]([datetime]::UtcNow - [datetime]'1970-01-01').TotalMilliseconds
 foreach ($dir in @("$env:USERPROFILE\.config\sf-steward", "$env:USERPROFILE\.config\openchamber")) {
@@ -641,6 +736,7 @@ if (Test-Path $electronCache) { Remove-Item -Recurse -Force $electronCache -Erro
 [System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", $API_KEY, "User")
 $env:OPENROUTER_API_KEY = $API_KEY
 Write-Ok "API key set"
+Set-InstallStage "done"
 
 Write-Host ""
 Write-Host "  +==========================================+" -ForegroundColor Blue
