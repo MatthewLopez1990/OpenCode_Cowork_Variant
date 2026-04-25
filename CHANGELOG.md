@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Installer: prepared `installer-v0.1.9` with live Windows desktop packaging output and a persistent diagnostic log at `%USERPROFILE%\.opencode-cowork-install\install-windows.log`.
 - Installer: prepared `installer-v0.1.8` with Windows PowerShell-safe Bun/Electron command execution so normal Bun progress output does not surface as `NativeCommandError`.
 - Installer: prepared `installer-v0.1.7` with release-tag based installs, synced package metadata, optional Windows Authenticode signing, and corrected cross-platform Word document instructions.
 

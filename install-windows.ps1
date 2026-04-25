@@ -18,12 +18,37 @@ $ErrorActionPreference = "Continue"
 $COWORK_REPO = "https://github.com/MatthewLopez1990/ChatFortAI-Cowork.git"
 $COWORK_REPO_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$env:USERPROFILE\.opencode-cowork-build"
+$INSTALL_LOG_DIR = "$env:USERPROFILE\.opencode-cowork-install"
+$INSTALL_LOG = "$INSTALL_LOG_DIR\install-windows.log"
 # Which branch to build from. Defaults to main; the GUI installer overrides this
 # to the feature branch during pre-merge testing.
 $COWORK_GIT_BRANCH = if ($env:COWORK_GIT_BRANCH) { $env:COWORK_GIT_BRANCH } else { "main" }
 
-function Write-Ok($m) { Write-Host "  * $m" -ForegroundColor Green }
-function Write-Warn($m) { Write-Host "  ! $m" -ForegroundColor Yellow }
+New-Item -ItemType Directory -Force -Path $INSTALL_LOG_DIR | Out-Null
+Set-Content -Path $INSTALL_LOG -Encoding UTF8 -Value "[$(Get-Date -Format o)] Starting Windows installer"
+
+function Write-InstallLog($m) {
+    Add-Content -Path $script:INSTALL_LOG -Encoding UTF8 -Value "[$(Get-Date -Format o)] $m" -ErrorAction SilentlyContinue
+}
+
+function Write-InstallerLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+
+        [string]$ForegroundColor = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ForegroundColor)) {
+        Write-Host $Message
+    } else {
+        Write-Host $Message -ForegroundColor $ForegroundColor
+    }
+    Write-InstallLog $Message
+}
+
+function Write-Ok($m) { Write-InstallerLine "  * $m" "Green" }
+function Write-Warn($m) { Write-InstallerLine "  ! $m" "Yellow" }
 
 # Write UTF-8 WITHOUT BOM
 function Write-Utf8NoBom($Path, $Content) {
@@ -55,57 +80,72 @@ function Invoke-NativeTool {
 
         [int]$Tail = 0,
 
-        [string]$MatchPattern = ""
+        [string]$MatchPattern = "",
+
+        [switch]$Live
     )
 
     $oldEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
+    $output = New-Object 'System.Collections.Generic.List[string]'
 
     try {
-        $process = Start-Process `
-            -FilePath $FilePath `
-            -ArgumentList $ArgumentList `
-            -NoNewWindow `
-            -Wait `
-            -PassThru `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
-
-        $output = @()
-        if (Test-Path $stdoutPath) {
-            $output += Get-Content $stdoutPath -ErrorAction SilentlyContinue
+        $command = Get-Command $FilePath -ErrorAction SilentlyContinue
+        if (-not $command) {
+            Write-InstallerLine "  ! Required command not found: $FilePath" "Red"
+            exit 127
         }
+
+        Write-InstallLog "Running native command: $FilePath $($ArgumentList -join ' ')"
+
+        & $command.Source @ArgumentList 2> $stderrPath | ForEach-Object {
+            $line = $_.ToString()
+            $output.Add($line)
+            Write-InstallLog "[stdout] $line"
+            $matchesFilter = [string]::IsNullOrWhiteSpace($MatchPattern) -or $line -match $MatchPattern
+            if ($Live -and $matchesFilter) {
+                Write-Host $line
+            }
+        }
+        $exitCode = $LASTEXITCODE
+
         if (Test-Path $stderrPath) {
-            $output += Get-Content $stderrPath -ErrorAction SilentlyContinue
-        }
-
-        $displayOutput = $output
-        if (-not [string]::IsNullOrWhiteSpace($MatchPattern)) {
-            $displayOutput = $output | Select-String -Pattern $MatchPattern | ForEach-Object { $_.Line }
-        }
-
-        if ($Tail -gt 0) {
-            $displayOutput | Select-Object -Last $Tail | ForEach-Object {
-                if ($null -ne $_) { Write-Host $_ }
-            }
-        } elseif ($displayOutput.Count -gt 0) {
-            $displayOutput | ForEach-Object {
-                if ($null -ne $_) { Write-Host $_ }
+            Get-Content $stderrPath -ErrorAction SilentlyContinue | ForEach-Object {
+                $line = $_.ToString()
+                $output.Add($line)
+                Write-InstallLog "[stderr] $line"
             }
         }
 
-        if ($process.ExitCode -ne 0) {
-            Write-Host "  ! $FilePath failed with exit code $($process.ExitCode)" -ForegroundColor Red
-            $output | Select-Object -Last 40 | ForEach-Object {
-                if ($null -ne $_) { Write-Host "    $_" }
+        if (-not $Live) {
+            $displayOutput = $output
+            if (-not [string]::IsNullOrWhiteSpace($MatchPattern)) {
+                $displayOutput = $output | Select-String -Pattern $MatchPattern | ForEach-Object { $_.Line }
             }
-            exit $process.ExitCode
+
+            if ($Tail -gt 0) {
+                $displayOutput | Select-Object -Last $Tail | ForEach-Object {
+                    if ($null -ne $_) { Write-InstallerLine $_ }
+                }
+            } elseif ($displayOutput.Count -gt 0) {
+                $displayOutput | ForEach-Object {
+                    if ($null -ne $_) { Write-InstallerLine $_ }
+                }
+            }
+        }
+
+        if ($exitCode -ne 0) {
+            Write-InstallerLine "  ! $FilePath failed with exit code $exitCode" "Red"
+            Write-InstallerLine "  ! Full diagnostic log: $script:INSTALL_LOG" "Red"
+            $output | Select-Object -Last 80 | ForEach-Object {
+                if ($null -ne $_) { Write-InstallerLine "    $_" }
+            }
+            exit $exitCode
         }
     } finally {
         $ErrorActionPreference = $oldEap
-        Remove-Item $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -115,6 +155,7 @@ Write-Host "  |  OpenCode Cowork - Enterprise Installer   |" -ForegroundColor Bl
 Write-Host "  |  White-label AI for your organization      |" -ForegroundColor Blue
 Write-Host "  +==========================================+" -ForegroundColor Blue
 Write-Host ""
+Write-InstallerLine "  Diagnostic log: $INSTALL_LOG"
 
 # Step 1: Organization Setup
 # Any value pre-populated via env (COWORK_APP_NAME, COWORK_API_KEY,
@@ -362,9 +403,10 @@ Write-Ok "Frontend built"
 
 # Build Electron
 Write-Host "  Packaging desktop app..."
+Write-InstallerLine "  Electron Builder can spend several minutes downloading Windows packaging tools. Live output will continue below."
 if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
 if (-not (Test-Path "$BUILD_DIR\branding\icon.png")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null; New-Item "$BUILD_DIR\branding\icon.png" -ItemType File -Force | Out-Null }
-Invoke-NativeTool -FilePath "bunx" -ArgumentList @("electron-builder", "--config", "electron-builder.json", "--win", "--x64") -MatchPattern "(building|packaging|target=)" -Tail 5
+Invoke-NativeTool -FilePath "bunx" -ArgumentList @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never") -Live
 
 $EXE_NAME = "$APP_NAME.exe"
 $INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"

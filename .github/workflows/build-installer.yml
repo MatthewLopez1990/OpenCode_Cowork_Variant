@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional release tag to attach artifacts to (e.g. installer-v0.1.8). Leave empty to only upload as workflow artifacts.'
+        description: 'Optional release tag to attach artifacts to (e.g. installer-v0.1.9). Leave empty to only upload as workflow artifacts.'
         required: false
         type: string
   push:
