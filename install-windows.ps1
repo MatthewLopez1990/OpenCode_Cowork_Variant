@@ -524,9 +524,11 @@ function Repair-ElectronBuilderCache {
     Get-ChildItem $cacheRoot -Filter "*.7z" -ErrorAction SilentlyContinue | ForEach-Object {
         $archive = $_
         $extractDir = Join-Path $cacheRoot $archive.BaseName
-        $hasWindowsTools = (Test-Path (Join-Path $extractDir "windows-10")) -or
-                           (Test-Path (Join-Path $extractDir "windows"))
-        if ($hasWindowsTools) { return }
+        # Marker file proves WE extracted this archive cleanly with -xr!*.dylib.
+        # We can't trust the presence of windows-10/ to mean "complete" because
+        # electron-builder's own failed extracts leave windows-10/ behind too.
+        $marker = Join-Path $extractDir ".cowork-extracted"
+        if (Test-Path $marker) { return }
 
         if (Test-Path $extractDir) {
             Write-InstallLog "Removing partial cache extract at $extractDir"
@@ -535,6 +537,9 @@ function Repair-ElectronBuilderCache {
         Write-InstallLog "Pre-extracting $($archive.Name) without macOS dylib symlinks"
         & $sevenZa.FullName x -bd $archive.FullName "-o$extractDir" "-xr!*.dylib" -y 2>&1 |
             ForEach-Object { Write-InstallLog "[7za] $_" }
+        if (Test-Path $extractDir) {
+            Set-Content -Path $marker -Value "ok" -Encoding ASCII
+        }
     }
 }
 
