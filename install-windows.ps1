@@ -147,7 +147,6 @@ function Invoke-NativeTool {
 
     $oldEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $stderrPath = [System.IO.Path]::GetTempFileName()
     $output = New-Object 'System.Collections.Generic.List[string]'
 
     try {
@@ -158,24 +157,24 @@ function Invoke-NativeTool {
 
         Write-InstallLog "Running native command: $FilePath $($ArgumentList -join ' ')"
 
-        & $command.Source @ArgumentList 2> $stderrPath | ForEach-Object {
+        # Merge stderr into the pipeline (2>&1) instead of redirecting to a
+        # tempfile. Under PS 5.1 the tempfile path wraps the first stderr line
+        # of every native command in NativeCommandError formatting (CategoryInfo,
+        # FullyQualifiedErrorId, source-line markers), which buries the actual
+        # error message and pollutes the diagnostic log. With 2>&1 the stderr
+        # stream arrives as ErrorRecord objects whose .ToString() returns just
+        # the original message, and -Live actually streams in real time.
+        & $command.Source @ArgumentList 2>&1 | ForEach-Object {
             $line = $_.ToString()
             $output.Add($line)
-            Write-InstallLog "[stdout] $line"
+            $stream = if ($_ -is [System.Management.Automation.ErrorRecord]) { 'stderr' } else { 'stdout' }
+            Write-InstallLog "[$stream] $line"
             $matchesFilter = [string]::IsNullOrWhiteSpace($MatchPattern) -or $line -match $MatchPattern
             if ($Live -and $matchesFilter) {
                 Write-Host $line
             }
         }
         $exitCode = $LASTEXITCODE
-
-        if (Test-Path $stderrPath) {
-            Get-Content $stderrPath -ErrorAction SilentlyContinue | ForEach-Object {
-                $line = $_.ToString()
-                $output.Add($line)
-                Write-InstallLog "[stderr] $line"
-            }
-        }
 
         if (-not $Live) {
             $displayOutput = $output
@@ -199,7 +198,6 @@ function Invoke-NativeTool {
         }
     } finally {
         $ErrorActionPreference = $oldEap
-        Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue
     }
 }
 
