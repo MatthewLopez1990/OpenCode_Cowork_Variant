@@ -543,32 +543,40 @@ function Repair-ElectronBuilderCache {
     }
 }
 
-# Wraps Invoke-NativeTool so we can swallow the first electron-builder
-# failure, repair the cache, and retry once. After retry, any failure
-# bubbles up via Invoke-NativeTool -> Fail-Install as usual.
+# Loop electron-builder up to N times. Each electron-builder run can
+# download MORE winCodeSign archives (signing tools for additional target
+# architectures), so a single retry isn't enough — we keep repairing the
+# cache and retrying until the build succeeds or the iteration cap hits.
+# Repair-ElectronBuilderCache is idempotent thanks to the marker file, so
+# previously-extracted caches are skipped.
 function Invoke-ElectronBuilderWithRepair {
-    Repair-ElectronBuilderCache
-
     $ebArgs = @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never")
-    $oldEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
     $bunx = Get-Command "bunx" -ErrorAction SilentlyContinue
     if (-not $bunx) { Fail-Install "bunx not found on PATH" 127 }
 
-    & $bunx.Source @ebArgs 2>&1 | ForEach-Object {
-        $line = $_.ToString()
-        $stream = if ($_ -is [System.Management.Automation.ErrorRecord]) { 'stderr' } else { 'stdout' }
-        Write-InstallLog "[$stream] $line"
-        Write-Host $line
+    $maxAttempts = 5
+    $lastExit = -1
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        Repair-ElectronBuilderCache
+        if ($attempt -gt 1) {
+            Write-InstallerLine "  electron-builder attempt $attempt of $maxAttempts (cache repaired)..." "Yellow"
+        }
+
+        $oldEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & $bunx.Source @ebArgs 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            $stream = if ($_ -is [System.Management.Automation.ErrorRecord]) { 'stderr' } else { 'stdout' }
+            Write-InstallLog "[$stream] $line"
+            Write-Host $line
+        }
+        $lastExit = $LASTEXITCODE
+        $ErrorActionPreference = $oldEap
+
+        if ($lastExit -eq 0) { return }
+        Write-InstallerLine "  ! electron-builder attempt $attempt failed (exit $lastExit)" "Yellow"
     }
-    $firstExit = $LASTEXITCODE
-    $ErrorActionPreference = $oldEap
-
-    if ($firstExit -eq 0) { return }
-
-    Write-InstallerLine "  ! electron-builder exited $firstExit on first attempt; repairing cache and retrying..." "Yellow"
-    Repair-ElectronBuilderCache
-    Invoke-NativeTool -FilePath "bunx" -ArgumentList $ebArgs -Live
+    Fail-Install "electron-builder failed after $maxAttempts attempts (exit $lastExit). Likely cause: SeCreateSymbolicLinkPrivilege not held; enable Windows Developer Mode or run from an elevated terminal." $lastExit
 }
 
 Invoke-ElectronBuilderWithRepair
