@@ -94,6 +94,33 @@ function Write-Utf8NoBom($Path, $Content) {
     [System.IO.File]::WriteAllText($Path, $Content, $utf8)
 }
 
+# Robust directory removal. PowerShell's Remove-Item -Recurse -Force chokes on
+# broken symlinks/junctions left behind by partial bun installs (it tries to
+# traverse the link, fails to stat the target, and aborts mid-walk leaving
+# the parent dir behind). cmd /c rmdir /s /q removes symlinks without
+# traversing them, which handles those leftovers cleanly. Fail loudly if the
+# directory is still there afterward — silently skipping leaves a populated
+# dir that breaks the next git clone with an opaque "destination path
+# already exists" error.
+function Remove-DirectoryHard {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-InstallLog "Remove-Item failed for ${Path}: $($_.Exception.Message); falling back to cmd rmdir"
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        & cmd /c "rmdir /s /q `"$Path`"" 2>&1 | ForEach-Object { Write-InstallLog "[rmdir] $_" }
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        Fail-Install "Could not remove existing directory: $Path. Close any apps using it (Explorer, editors, antivirus) and re-run the installer."
+    }
+}
+
 # PowerShell 5.1 raises NativeCommandError when a native tool writes ANYTHING
 # to stderr under $ErrorActionPreference = 'Stop' - even harmless progress
 # messages like git's "Cloning into '...'". This helper runs git with the
@@ -351,13 +378,13 @@ if (Test-Path "$BUILD_DIR\.git") {
     if ($CURRENT_BRANCH -ne $COWORK_GIT_BRANCH) {
         Write-Host "  Existing build on '$CURRENT_BRANCH' - switching to '$COWORK_GIT_BRANCH'"
         Set-Location ..
-        Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+        Remove-DirectoryHard $BUILD_DIR
         Invoke-GitChecked "Clone application source" clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
     } else {
         Invoke-GitChecked "Update existing application source" pull --ff-only | Out-Null
     }
 } else {
-    Remove-Item -Recurse -Force $BUILD_DIR -ErrorAction SilentlyContinue
+    Remove-DirectoryHard $BUILD_DIR
     Invoke-GitChecked "Clone application source" clone --depth 1 --branch $COWORK_GIT_BRANCH $COWORK_REPO $BUILD_DIR | Out-Null
 }
 
