@@ -502,7 +502,71 @@ Write-Host "  Packaging desktop app..."
 Write-InstallerLine "  Electron Builder can spend several minutes downloading Windows packaging tools. Live output will continue below."
 if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
 if (-not (Test-Path "$BUILD_DIR\branding\icon.png")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null; New-Item "$BUILD_DIR\branding\icon.png" -ItemType File -Force | Out-Null }
-Invoke-NativeTool -FilePath "bunx" -ArgumentList @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never") -Live
+
+# electron-builder downloads winCodeSign.7z which contains macOS dylib symlinks
+# (libcrypto/libssl). Extracting them on Windows requires
+# SeCreateSymbolicLinkPrivilege (admin OR Developer Mode), which most end
+# users don't have. The 7za extract aborts and electron-builder exits 1
+# with "Cannot create symbolic link : A required privilege is not held by
+# the client." Since this build is --win --x64, the macOS dylibs are not
+# needed; pre-extract the archive ourselves with -xr!*.dylib so the cache
+# is populated before electron-builder tries to use it. Idempotent — runs
+# before electron-builder and again on retry if anything is still wrong.
+function Repair-ElectronBuilderCache {
+    $cacheRoot = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+    if (-not (Test-Path $cacheRoot)) { return }
+
+    $sevenZa = Get-ChildItem "$BUILD_DIR\node_modules" -Recurse -Filter "7za.exe" -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like "*\win\x64\*" } |
+        Select-Object -First 1
+    if (-not $sevenZa) { return }
+
+    Get-ChildItem $cacheRoot -Filter "*.7z" -ErrorAction SilentlyContinue | ForEach-Object {
+        $archive = $_
+        $extractDir = Join-Path $cacheRoot $archive.BaseName
+        $hasWindowsTools = (Test-Path (Join-Path $extractDir "windows-10")) -or
+                           (Test-Path (Join-Path $extractDir "windows"))
+        if ($hasWindowsTools) { return }
+
+        if (Test-Path $extractDir) {
+            Write-InstallLog "Removing partial cache extract at $extractDir"
+            Remove-DirectoryHard $extractDir
+        }
+        Write-InstallLog "Pre-extracting $($archive.Name) without macOS dylib symlinks"
+        & $sevenZa.FullName x -bd $archive.FullName "-o$extractDir" "-xr!*.dylib" -y 2>&1 |
+            ForEach-Object { Write-InstallLog "[7za] $_" }
+    }
+}
+
+# Wraps Invoke-NativeTool so we can swallow the first electron-builder
+# failure, repair the cache, and retry once. After retry, any failure
+# bubbles up via Invoke-NativeTool -> Fail-Install as usual.
+function Invoke-ElectronBuilderWithRepair {
+    Repair-ElectronBuilderCache
+
+    $ebArgs = @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never")
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $bunx = Get-Command "bunx" -ErrorAction SilentlyContinue
+    if (-not $bunx) { Fail-Install "bunx not found on PATH" 127 }
+
+    & $bunx.Source @ebArgs 2>&1 | ForEach-Object {
+        $line = $_.ToString()
+        $stream = if ($_ -is [System.Management.Automation.ErrorRecord]) { 'stderr' } else { 'stdout' }
+        Write-InstallLog "[$stream] $line"
+        Write-Host $line
+    }
+    $firstExit = $LASTEXITCODE
+    $ErrorActionPreference = $oldEap
+
+    if ($firstExit -eq 0) { return }
+
+    Write-InstallerLine "  ! electron-builder exited $firstExit on first attempt; repairing cache and retrying..." "Yellow"
+    Repair-ElectronBuilderCache
+    Invoke-NativeTool -FilePath "bunx" -ArgumentList $ebArgs -Live
+}
+
+Invoke-ElectronBuilderWithRepair
 
 $EXE_NAME = "$APP_NAME.exe"
 $INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"
