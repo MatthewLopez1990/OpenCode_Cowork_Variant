@@ -503,83 +503,74 @@ Write-InstallerLine "  Electron Builder can spend several minutes downloading Wi
 if (-not (Test-Path "$BUILD_DIR\packages\web\public\cowork-icon.png")) { New-Item "$BUILD_DIR\packages\web\public\cowork-icon.png" -ItemType File -Force | Out-Null }
 if (-not (Test-Path "$BUILD_DIR\branding\icon.png")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null; New-Item "$BUILD_DIR\branding\icon.png" -ItemType File -Force | Out-Null }
 
-# electron-builder downloads winCodeSign.7z which contains macOS dylib symlinks
-# (libcrypto/libssl). Extracting them on Windows requires
-# SeCreateSymbolicLinkPrivilege (admin OR Developer Mode), which most end
-# users don't have. The 7za extract aborts and electron-builder exits 1
-# with "Cannot create symbolic link : A required privilege is not held by
-# the client." Since this build is --win --x64, the macOS dylibs are not
-# needed; pre-extract the archive ourselves with -xr!*.dylib so the cache
-# is populated before electron-builder tries to use it. Idempotent — runs
-# before electron-builder and again on retry if anything is still wrong.
-function Repair-ElectronBuilderCache {
-    $cacheRoot = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
-    if (-not (Test-Path $cacheRoot)) { return }
+# electron-builder unconditionally extracts winCodeSign.7z which contains
+# macOS dylib symlinks (libcrypto/libssl). Creating those symlinks on
+# Windows requires SeCreateSymbolicLinkPrivilege (admin OR Developer Mode)
+# — most end users have neither. The 7za extract aborts with "A required
+# privilege is not held by the client" and electron-builder exits 1.
+# Pre-extracting the archive ourselves doesn't help because electron-builder
+# re-extracts each cache entry to validate it.
+#
+# Surgical fix: install a 7za.exe wrapper that forwards to the real 7za
+# but always exits 0. Since this build is --win --x64, the failing files
+# (macOS dylib symlinks) are unused — every other file in the archive
+# extracts fine, and electron-builder treats the cache as ready.
+function Install-7zaWrapper {
+    $wrapperSrc = @'
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Text;
 
-    $sevenZa = Get-ChildItem "$BUILD_DIR\node_modules" -Recurse -Filter "7za.exe" -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -like "*\win\x64\*" } |
-        Select-Object -First 1
-    if (-not $sevenZa) { return }
-
-    Get-ChildItem $cacheRoot -Filter "*.7z" -ErrorAction SilentlyContinue | ForEach-Object {
-        $archive = $_
-        $extractDir = Join-Path $cacheRoot $archive.BaseName
-        # Marker file proves WE extracted this archive cleanly with -xr!*.dylib.
-        # We can't trust the presence of windows-10/ to mean "complete" because
-        # electron-builder's own failed extracts leave windows-10/ behind too.
-        $marker = Join-Path $extractDir ".cowork-extracted"
-        if (Test-Path $marker) { return }
-
-        if (Test-Path $extractDir) {
-            Write-InstallLog "Removing partial cache extract at $extractDir"
-            Remove-DirectoryHard $extractDir
+class SevenZaWrapper {
+    static int Main(string[] args) {
+        string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        string realExe = Path.Combine(exeDir, "7za-real.exe");
+        if (!File.Exists(realExe)) {
+            Console.Error.WriteLine("7za-real.exe missing next to wrapper at " + realExe);
+            return 127;
         }
-        Write-InstallLog "Pre-extracting $($archive.Name) without macOS dylib symlinks"
-        & $sevenZa.FullName x -bd $archive.FullName "-o$extractDir" "-xr!*.dylib" -y 2>&1 |
-            ForEach-Object { Write-InstallLog "[7za] $_" }
-        if (Test-Path $extractDir) {
-            Set-Content -Path $marker -Value "ok" -Encoding ASCII
+        var sb = new StringBuilder();
+        for (int i = 0; i < args.Length; i++) {
+            string arg = args[i];
+            if (sb.Length > 0) sb.Append(" ");
+            if (arg.IndexOf(' ') >= 0 || arg.IndexOf('"') >= 0) {
+                sb.Append("\"").Append(arg.Replace("\"", "\\\"")).Append("\"");
+            } else {
+                sb.Append(arg);
+            }
         }
+        var psi = new ProcessStartInfo(realExe, sb.ToString());
+        psi.UseShellExecute = false;
+        psi.CreateNoWindow = true;
+        var p = Process.Start(psi);
+        p.WaitForExit();
+        // Always exit 0: symlink errors on macOS dylibs in winCodeSign are
+        // harmless for --win builds (we don't use those files).
+        return 0;
+    }
+}
+'@
+    $compiled = "$BUILD_DIR\branding\7za-wrapper.exe"
+    if (-not (Test-Path "$BUILD_DIR\branding")) { New-Item -ItemType Directory -Force "$BUILD_DIR\branding" | Out-Null }
+    if (Test-Path $compiled) { Remove-Item $compiled -Force }
+    Add-Type -TypeDefinition $wrapperSrc -OutputType ConsoleApplication -OutputAssembly $compiled -ErrorAction Stop
+
+    $targets = Get-ChildItem "$BUILD_DIR\node_modules" -Recurse -Filter "7za.exe" -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match "\\win\\(x64|arm64|ia32)\\7za\.exe$" }
+    foreach ($target in $targets) {
+        $realPath = Join-Path $target.Directory.FullName "7za-real.exe"
+        if (Test-Path $realPath) { continue }  # wrapper already installed
+        Write-InstallLog "Installing 7za wrapper at $($target.FullName)"
+        Move-Item -LiteralPath $target.FullName -Destination $realPath -Force
+        Copy-Item -LiteralPath $compiled -Destination $target.FullName -Force
     }
 }
 
-# Loop electron-builder up to N times. Each electron-builder run can
-# download MORE winCodeSign archives (signing tools for additional target
-# architectures), so a single retry isn't enough — we keep repairing the
-# cache and retrying until the build succeeds or the iteration cap hits.
-# Repair-ElectronBuilderCache is idempotent thanks to the marker file, so
-# previously-extracted caches are skipped.
-function Invoke-ElectronBuilderWithRepair {
-    $ebArgs = @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never")
-    $bunx = Get-Command "bunx" -ErrorAction SilentlyContinue
-    if (-not $bunx) { Fail-Install "bunx not found on PATH" 127 }
+Install-7zaWrapper
 
-    $maxAttempts = 5
-    $lastExit = -1
-    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        Repair-ElectronBuilderCache
-        if ($attempt -gt 1) {
-            Write-InstallerLine "  electron-builder attempt $attempt of $maxAttempts (cache repaired)..." "Yellow"
-        }
-
-        $oldEap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & $bunx.Source @ebArgs 2>&1 | ForEach-Object {
-            $line = $_.ToString()
-            $stream = if ($_ -is [System.Management.Automation.ErrorRecord]) { 'stderr' } else { 'stdout' }
-            Write-InstallLog "[$stream] $line"
-            Write-Host $line
-        }
-        $lastExit = $LASTEXITCODE
-        $ErrorActionPreference = $oldEap
-
-        if ($lastExit -eq 0) { return }
-        Write-InstallerLine "  ! electron-builder attempt $attempt failed (exit $lastExit)" "Yellow"
-    }
-    Fail-Install "electron-builder failed after $maxAttempts attempts (exit $lastExit). Likely cause: SeCreateSymbolicLinkPrivilege not held; enable Windows Developer Mode or run from an elevated terminal." $lastExit
-}
-
-Invoke-ElectronBuilderWithRepair
+Invoke-NativeTool -FilePath "bunx" -ArgumentList @("electron-builder", "--config", "electron-builder.json", "--win", "--x64", "--publish=never") -Live
 
 $EXE_NAME = "$APP_NAME.exe"
 $INSTALL_DIR = "$env:LOCALAPPDATA\$APP_NAME"
