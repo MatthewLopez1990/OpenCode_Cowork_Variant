@@ -414,7 +414,10 @@ $pkgContent.main = "electron/main.cjs"
 if ($pkgContent.PSObject.Properties.Name -contains 'overrides') {
     $pkgContent.PSObject.Properties.Remove('overrides')
 }
-$pkgContent | ConvertTo-Json -Depth 10 | Set-Content "$BUILD_DIR\package.json" -Encoding UTF8
+# Write WITHOUT BOM. Set-Content -Encoding UTF8 in PS 5.1 prepends a BOM
+# which PostCSS/Vite's JSON loader chokes on
+# ("Unexpected token ﻿, ... is not valid JSON").
+Write-Utf8NoBom "$BUILD_DIR\package.json" ($pkgContent | ConvertTo-Json -Depth 10)
 
 # Rewrite `workspace:*` in workspace package.jsons. Bun supports it; npm
 # rejects with EUNSUPPORTEDPROTOCOL. Replace with `*` — npm then resolves
@@ -445,7 +448,7 @@ if (Test-Path $INDEX_HTML) {
     if (Test-Path $windowTitleTs) {
         $tsContent = Get-Content $windowTitleTs -Raw
         $tsContent = $tsContent -replace "const APP_TITLE = '[^']*'", "const APP_TITLE = '$APP_NAME'"
-        Set-Content $windowTitleTs $tsContent -Encoding UTF8
+        Write-Utf8NoBom $windowTitleTs $tsContent
         Write-Ok "Window title patched"
     }
     if ($LOGO_ASSET) {
