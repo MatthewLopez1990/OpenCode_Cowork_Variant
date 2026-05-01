@@ -688,20 +688,45 @@ New-Item -ItemType Directory -Force -Path $OPENCODE_CONFIG_DIR | Out-Null
 
 # Auto-select the 5 newest models from Anthropic, OpenAI, and Google from
 # OpenRouter. Default = newest Claude Sonnet unless COWORK_DEFAULT_MODEL pins it.
+# Python's bundled by default on most installs; if it's not present we fall
+# through to the static Claude Sonnet 4.6 default + just that one model in
+# the picker. Surface that loudly so users aren't silently stuck with one
+# model in the dropdown.
 $FETCHED_MODELS_FILE = [System.IO.Path]::GetTempFileName() + '.json'
 Write-Host "  Fetching newest Anthropic / OpenAI / Google models from OpenRouter..."
-try {
-    $fetchOutput = python3 "$COWORK_REPO_DIR\scripts\fetch-top-models.py" $FETCHED_MODELS_FILE 2>$null
-    if ($LASTEXITCODE -eq 0 -and $fetchOutput) {
-        $fetchedDefault = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
-        $fetchedDisplay = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL_DISPLAY=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
-        if (-not $env:COWORK_DEFAULT_MODEL -and $fetchedDefault) {
-            $DEFAULT_MODEL = $fetchedDefault
-            $DEFAULT_MODEL_DISPLAY = $fetchedDisplay
+$pythonExe = $null
+foreach ($candidate in @("python3", "python", "py")) {
+    if (Get-Command $candidate -ErrorAction SilentlyContinue) { $pythonExe = $candidate; break }
+}
+if (-not $pythonExe) {
+    Write-Warn "Python not found on PATH; the model picker will only contain Claude Sonnet 4.6."
+    Write-Warn "Install Python 3 from https://python.org and re-run this installer to load all 15 models."
+} else {
+    $fetchStderr = [System.IO.Path]::GetTempFileName()
+    try {
+        $fetchOutput = & $pythonExe "$COWORK_REPO_DIR\scripts\fetch-top-models.py" $FETCHED_MODELS_FILE 2>$fetchStderr
+        $fetchExit = $LASTEXITCODE
+        if ($fetchExit -ne 0) {
+            $errLines = @()
+            if (Test-Path $fetchStderr) { $errLines = Get-Content $fetchStderr -ErrorAction SilentlyContinue }
+            Write-Warn "Model fetch exited with code $fetchExit; only Claude Sonnet 4.6 will be available."
+            if ($errLines) {
+                Write-Warn "  reason: $($errLines | Select-Object -First 1)"
+                $errLines | ForEach-Object { Write-InstallLog "[fetch-top-models] $_" }
+            }
+        } elseif ($fetchOutput) {
+            $fetchedDefault = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+            $fetchedDisplay = ($fetchOutput | Select-String -Pattern '^DEFAULT_MODEL_DISPLAY=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1)
+            if (-not $env:COWORK_DEFAULT_MODEL -and $fetchedDefault) {
+                $DEFAULT_MODEL = $fetchedDefault
+                $DEFAULT_MODEL_DISPLAY = $fetchedDisplay
+            }
         }
+    } catch {
+        Write-Warn "Could not auto-fetch models: $($_.Exception.Message). Only Claude Sonnet 4.6 will be available."
+    } finally {
+        Remove-Item $fetchStderr -Force -ErrorAction SilentlyContinue
     }
-} catch {
-    Write-Warn "Could not auto-fetch models: $_"
 }
 
 # Final safety net - force the static default if somehow still empty.

@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Installer: prepared `installer-v0.1.11` with end-to-end Windows fixes — verified the script runs to `Installation Complete` on a default Windows 11 user (no admin, no Developer Mode) and the branded Electron app launches cleanly. Notable fixes: `2>&1` stderr merge so `INSTALLER_FAILURE_DETAILS` shows real errors instead of PowerShell `NativeCommandError` boilerplate; robust `Remove-DirectoryHard` that handles broken bun symlinks left by partial installs; inline-compiled C# 7za wrapper that lets electron-builder past the `winCodeSign` macOS-dylib symlink-privilege error; switch from `bun install` (broken layout on Windows) to `npm install` with stripped `overrides` and rewritten `workspace:*` refs; `Write-Utf8NoBom` for the patched `package.json` (was breaking PostCSS/Vite); louder failure when `python3` isn't available for the OpenRouter model-fetch; corrected `HTTP-Referer` header to the renamed repo URL.
 - Installer: prepared `installer-v0.1.10` with structured Windows failure markers and a GUI failure summary that shows the failing stage, message, log path, and captured details.
 - Installer: prepared `installer-v0.1.9` with live Windows desktop packaging output and a persistent diagnostic log at `%USERPROFILE%\.opencode-cowork-install\install-windows.log`.
 - Installer: prepared `installer-v0.1.8` with Windows PowerShell-safe Bun/Electron command execution so normal Bun progress output does not surface as `NativeCommandError`.
