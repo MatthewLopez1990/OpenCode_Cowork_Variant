@@ -492,9 +492,15 @@ Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NA
 # @electron/get, which isn't a transitive dep of electron-builder@24.x
 # and the postinstall fails. Just let `bun install` resolve from
 # package.json.
+#
+# --linker hoisted + --backend copyfile: bun's default backend (hardlink)
+# silently leaves most package directories empty on this Windows
+# environment, so postinstall scripts (e.g. patch-package) fail with
+# "command not found" because their binstubs were never linked.
+# copyfile is slower but actually populates node_modules.
 Set-InstallStage "installing-build-dependencies"
 Write-Host "  Installing dependencies..."
-Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
+Invoke-NativeTool -FilePath "bun" -ArgumentList @("install", "--linker", "hoisted", "--backend", "copyfile") -Tail 3
 Write-Host "  Building frontend..."
 Set-InstallStage "building-web-frontend"
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("run", "build:web") -Tail 3
@@ -736,7 +742,7 @@ $providerLocationPushed = $false
 try {
     Push-Location $OPENCODE_CONFIG_DIR -ErrorAction Stop
     $providerLocationPushed = $true
-    Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
+    Invoke-NativeTool -FilePath "bun" -ArgumentList @("install", "--linker", "hoisted", "--backend", "copyfile") -Tail 3
 } finally {
     if ($providerLocationPushed) {
         Pop-Location -ErrorAction SilentlyContinue
