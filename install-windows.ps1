@@ -509,7 +509,12 @@ if (-not $npm) {
     Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
 } else {
     Write-Host "  Installing dependencies (npm)..."
-    Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error") -Tail 5
+    # --force: bun is lenient about `overrides` whose target is also a direct
+    # dependency; npm treats it as EOVERRIDE and bails. The repo declares
+    # @codemirror/language@^6.12.1 as a dep AND 6.12.2 as an override, which
+    # is harmless but rejected. --legacy-peer-deps doesn't fix EOVERRIDE; --force
+    # does.
+    Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error", "--force") -Tail 5
 }
 Write-Host "  Building frontend..."
 Set-InstallStage "building-web-frontend"
