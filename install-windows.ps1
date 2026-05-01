@@ -211,11 +211,11 @@ function Invoke-NativeTool {
 
             if ($Tail -gt 0) {
                 $displayOutput | Select-Object -Last $Tail | ForEach-Object {
-                    if ($null -ne $_) { Write-InstallerLine $_ }
+                    if (-not [string]::IsNullOrWhiteSpace($_)) { Write-InstallerLine $_ }
                 }
             } elseif ($displayOutput.Count -gt 0) {
                 $displayOutput | ForEach-Object {
-                    if ($null -ne $_) { Write-InstallerLine $_ }
+                    if (-not [string]::IsNullOrWhiteSpace($_)) { Write-InstallerLine $_ }
                 }
             }
         }
