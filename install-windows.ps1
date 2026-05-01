@@ -407,6 +407,13 @@ $pkgContent = Get-Content "$BUILD_DIR\package.json" -Raw | ConvertFrom-Json
 $pkgContent.name = ($APP_NAME.ToLower() -replace '[^a-z0-9]','-')
 $pkgContent | Add-Member -MemberType NoteProperty -Name "productName" -Value $APP_NAME -Force
 $pkgContent.main = "electron/main.cjs"
+# Strip the `overrides` block. The repo declares
+# @codemirror/language@^6.12.1 as a dep AND 6.12.2 as an override; npm
+# treats this as EOVERRIDE and refuses (--force does NOT bypass this).
+# The override is harmless (same minor) — drop it so npm can resolve.
+if ($pkgContent.PSObject.Properties.Name -contains 'overrides') {
+    $pkgContent.PSObject.Properties.Remove('overrides')
+}
 $pkgContent | ConvertTo-Json -Depth 10 | Set-Content "$BUILD_DIR\package.json" -Encoding UTF8
 
 # Patch index.html
@@ -509,12 +516,11 @@ if (-not $npm) {
     Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
 } else {
     Write-Host "  Installing dependencies (npm)..."
-    # --force: bun is lenient about `overrides` whose target is also a direct
-    # dependency; npm treats it as EOVERRIDE and bails. The repo declares
-    # @codemirror/language@^6.12.1 as a dep AND 6.12.2 as an override, which
-    # is harmless but rejected. --legacy-peer-deps doesn't fix EOVERRIDE; --force
-    # does.
-    Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error", "--force") -Tail 5
+    # The cloned package.json has had its `overrides` block stripped above
+    # (npm rejects EOVERRIDE when an override target is also a direct dep,
+    # and --force does NOT bypass that check). With overrides removed, npm
+    # resolves cleanly.
+    Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error") -Tail 5
 }
 Write-Host "  Building frontend..."
 Set-InstallStage "building-web-frontend"
