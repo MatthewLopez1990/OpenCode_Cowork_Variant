@@ -416,6 +416,20 @@ if ($pkgContent.PSObject.Properties.Name -contains 'overrides') {
 }
 $pkgContent | ConvertTo-Json -Depth 10 | Set-Content "$BUILD_DIR\package.json" -Encoding UTF8
 
+# Rewrite `workspace:*` in workspace package.jsons. Bun supports it; npm
+# rejects with EUNSUPPORTEDPROTOCOL. Replace with `*` — npm then resolves
+# the local workspace if a sibling workspace declares the same name.
+Get-ChildItem "$BUILD_DIR\packages" -Recurse -Filter "package.json" -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notlike "*node_modules*" } |
+    ForEach-Object {
+        $raw = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+        if ($raw -and $raw -match 'workspace:\*') {
+            $patched = $raw -replace '"workspace:\*"', '"*"'
+            Write-Utf8NoBom $_.FullName $patched
+            Write-InstallLog "Rewrote workspace:* in $($_.FullName)"
+        }
+    }
+
 # Patch index.html
 $INDEX_HTML = "$BUILD_DIR\packages\web\index.html"
 if (Test-Path $INDEX_HTML) {
