@@ -4,7 +4,10 @@ Drop-in, double-click installers for end users who don't want to touch a termina
 
 | File | Platform | Architecture |
 |------|----------|--------------|
-| `ChatFortAI Cowork Installer_0.1.0_aarch64.dmg` | macOS | Apple Silicon (M1 and newer) |
+| `ChatFortAI.Cowork.Installer_0.1.10_aarch64.dmg` | macOS | Apple Silicon (M1 and newer) |
+| `ChatFortAI.Cowork.Installer_0.1.10_x64.dmg` | macOS | Intel |
+| `ChatFortAI.Cowork.Installer_0.1.10_x64-setup.exe` | Windows | x64 |
+| `ChatFortAI.Cowork.Installer_0.1.10_amd64.AppImage` | Linux | x64 |
 
 ## How to use
 
@@ -12,7 +15,7 @@ Drop-in, double-click installers for end users who don't want to touch a termina
 
 1. Double-click the `.dmg` to mount it.
 2. Drag "ChatFortAI Cowork Installer" to your Applications folder.
-3. Right-click the app → **Open** the first time (bypasses Gatekeeper since the app is unsigned for v1).
+3. Right-click the app → **Open** the first time if Gatekeeper prompts on an unsigned build.
 4. Follow the 3-step wizard: branding → install → finish. The installer auto-loads the 5 newest models from Anthropic, OpenAI, and Google with Claude Sonnet as the starting default.
 
 ## Other platforms

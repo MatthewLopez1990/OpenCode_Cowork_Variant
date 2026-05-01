@@ -1,0 +1,103 @@
+name: Build Windows Installer
+
+# Windows-only repair workflow. Push installer-windows-vX.Y.Z to build just the
+# Windows artifact and attach it to the matching installer-vX.Y.Z release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to attach the Windows artifact to, e.g. installer-v0.1.10.'
+        required: true
+        type: string
+      clone_ref:
+        description: 'Git ref the installer should clone when it runs. Defaults to release_tag.'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'installer-windows-v*'
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release target
+        id: release
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RELEASE_TAG="${{ inputs.release_tag }}"
+            CLONE_REF="${{ inputs.clone_ref }}"
+            if [[ -z "$CLONE_REF" ]]; then
+              CLONE_REF="$RELEASE_TAG"
+            fi
+          else
+            VERSION="${GITHUB_REF_NAME#installer-windows-v}"
+            RELEASE_TAG="installer-v${VERSION}"
+            CLONE_REF="$RELEASE_TAG"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "clone_ref=$CLONE_REF" >> "$GITHUB_OUTPUT"
+          echo "Building Windows installer for $RELEASE_TAG (runtime clone ref: $CLONE_REF)"
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/installer/src-tauri
+          key: installer-windows-${{ steps.release.outputs.release_tag }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build installer
+        run: bun run --cwd packages/installer tauri build --target x86_64-pc-windows-msvc
+        env:
+          COWORK_INSTALLER_CLONE_REF: ${{ steps.release.outputs.clone_ref }}
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ vars.WINDOWS_SIGNING_TIMESTAMP_URL }}
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find packages/installer/src-tauri/target/x86_64-pc-windows-msvc/release/bundle -type f \
+            \( -name "*.msi" -o -name "*.exe" \) \
+            -exec cp {} artifacts/ \;
+          ls -la artifacts/
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows-x64
+          path: artifacts/*
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.release_tag }}
+          name: ${{ steps.release.outputs.release_tag }}
+          make_latest: true
+          files: artifacts/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

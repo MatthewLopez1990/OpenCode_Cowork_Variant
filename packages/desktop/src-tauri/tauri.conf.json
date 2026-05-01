@@ -71,6 +71,9 @@
         }
       }
     },
+    "windows": {
+      "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../../scripts/sign-windows.ps1 %1"
+    },
     "createUpdaterArtifacts": true
   },
   "plugins": {

@@ -202,6 +202,63 @@ function AssetDrop(props: {
   );
 }
 
+interface FailureSummary {
+  message: string;
+  stage?: string;
+  logPath?: string;
+  details: string[];
+}
+
+const FAILURE_DETAILS_BEGIN = 'INSTALLER_FAILURE_DETAILS_BEGIN';
+const FAILURE_DETAILS_END = 'INSTALLER_FAILURE_DETAILS_END';
+
+function getLastMarkerValue(lines: string[], marker: string): string | undefined {
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    if (line.startsWith(marker)) {
+      return line.slice(marker.length).trim();
+    }
+  }
+  return undefined;
+}
+
+function summarizeFailure(
+  lines: LogEvent[],
+  exitCode: number | null,
+  error: string | null,
+): FailureSummary | null {
+  if (exitCode === null && !error) return null;
+
+  const textLines = lines.map((line) => line.line);
+  const detailStart = textLines.lastIndexOf(FAILURE_DETAILS_BEGIN);
+  const detailEnd = textLines.lastIndexOf(FAILURE_DETAILS_END);
+  const markerDetails =
+    detailStart >= 0 && detailEnd > detailStart
+      ? textLines
+          .slice(detailStart + 1, detailEnd)
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : [];
+
+  const importantLinePattern =
+    /(^\s*!|error|failed|failure|exception|denied|not found|cannot|exit code|enoent|eacces|err!)/i;
+  const importantDetails = textLines
+    .filter((line) => importantLinePattern.test(line))
+    .slice(-16);
+
+  const message =
+    getLastMarkerValue(textLines, 'INSTALLER_FAILURE_MESSAGE=') ||
+    error ||
+    (exitCode !== null ? `Installer exited with code ${exitCode}.` : 'Installation failed.');
+
+  return {
+    message,
+    stage: getLastMarkerValue(textLines, 'INSTALLER_FAILURE_STAGE='),
+    logPath: getLastMarkerValue(textLines, 'INSTALLER_FAILURE_LOG='),
+    details: markerDetails.length > 0 ? markerDetails : importantDetails,
+  };
+}
+
 function InstallStep(props: { payload: InstallPayload; onDone: () => void }) {
   const [lines, setLines] = useState<LogEvent[]>([]);
   const [status, setStatus] = useState<StatusEvent>({ stage: 'starting', message: 'Starting…' });
@@ -246,19 +303,17 @@ function InstallStep(props: { payload: InstallPayload; onDone: () => void }) {
     }
   }, [lines]);
 
-  const statusClass =
-    status.stage === 'error' || exitCode !== null && exitCode !== 0 || error
-      ? 'status-error'
-      : status.stage === 'done'
-      ? 'status-done'
-      : 'status-running';
+  const failureSummary = summarizeFailure(lines, exitCode, error);
+  const hasFailure = status.stage === 'error' || (exitCode !== null && exitCode !== 0) || Boolean(error);
+  const statusClass = hasFailure ? 'status-error' : status.stage === 'done' ? 'status-done' : 'status-running';
+  const statusMessage = failureSummary?.message || error || `${status.stage}: ${status.message}`;
 
   return (
     <div className="step">
       <h2>Installing {props.payload.appName}</h2>
       <div className={`install-status ${statusClass}`}>
         <span className="dot" />
-        {error ? error : `${status.stage}: ${status.message}`}
+        {statusMessage}
       </div>
       <div className="log" ref={logRef}>
         {lines.map((l, idx) => (
@@ -267,9 +322,21 @@ function InstallStep(props: { payload: InstallPayload; onDone: () => void }) {
           </div>
         ))}
       </div>
-      {(exitCode !== null && exitCode !== 0) && (
-        <div className="alert alert-error">
-          Installer exited with code {exitCode}. Scroll the log for details.
+      {failureSummary && (
+        <div className="alert alert-error failure-summary">
+          <strong>{failureSummary.message}</strong>
+          <div className="failure-meta">
+            {exitCode !== null && <>Exit code: <span className="code">{exitCode}</span></>}
+            {failureSummary.stage && <> Stage: <span className="code">{failureSummary.stage}</span></>}
+          </div>
+          {failureSummary.logPath && (
+            <div className="failure-meta">
+              Diagnostic log: <span className="code">{failureSummary.logPath}</span>
+            </div>
+          )}
+          {failureSummary.details.length > 0 && (
+            <pre className="failure-details">{failureSummary.details.join('\n')}</pre>
+          )}
         </div>
       )}
     </div>
