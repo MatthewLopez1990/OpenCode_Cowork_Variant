@@ -489,18 +489,28 @@ Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NA
 # versions of electron, electron-builder, electron-store, and
 # electron-context-menu. Don't `bun add ...@latest` over them — that
 # pulls bleeding-edge Electron (e.g. 41.x) whose install.js requires
-# @electron/get, which isn't a transitive dep of electron-builder@24.x
-# and the postinstall fails. Just let `bun install` resolve from
-# package.json.
+# @electron/get (not a transitive dep of electron-builder@24.x) and
+# the postinstall fails.
 #
-# --linker hoisted + --backend copyfile: bun's default backend (hardlink)
-# silently leaves most package directories empty on this Windows
-# environment, so postinstall scripts (e.g. patch-package) fail with
-# "command not found" because their binstubs were never linked.
-# copyfile is slower but actually populates node_modules.
+# Use npm instead of bun for the install. Bun's install on this Windows
+# environment leaves most package directories empty (default hardlink
+# backend) or fails to enqueue lifecycle scripts (--linker hoisted +
+# --backend copyfile combo) — both leave node_modules/.bin empty, so
+# patch-package and other binstubs are unreachable. npm install is the
+# slower-but-reliable fallback. We still use `bun run` and `bunx` for
+# build/run steps later because those don't depend on the install layout.
 Set-InstallStage "installing-build-dependencies"
-Write-Host "  Installing dependencies..."
-Invoke-NativeTool -FilePath "bun" -ArgumentList @("install", "--linker", "hoisted", "--backend", "copyfile") -Tail 3
+$npm = Get-Command "npm" -ErrorAction SilentlyContinue
+if (-not $npm) {
+    # npm ships with Node; fall back to bun if not present (most likely path is
+    # via Node from winget/direct install).
+    Write-Warn "npm not found on PATH; falling back to bun install"
+    Write-Host "  Installing dependencies (bun)..."
+    Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
+} else {
+    Write-Host "  Installing dependencies (npm)..."
+    Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error") -Tail 5
+}
 Write-Host "  Building frontend..."
 Set-InstallStage "building-web-frontend"
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("run", "build:web") -Tail 3
@@ -742,7 +752,12 @@ $providerLocationPushed = $false
 try {
     Push-Location $OPENCODE_CONFIG_DIR -ErrorAction Stop
     $providerLocationPushed = $true
-    Invoke-NativeTool -FilePath "bun" -ArgumentList @("install", "--linker", "hoisted", "--backend", "copyfile") -Tail 3
+    $npm = Get-Command "npm" -ErrorAction SilentlyContinue
+    if ($npm) {
+        Invoke-NativeTool -FilePath "npm" -ArgumentList @("install", "--no-audit", "--no-fund", "--loglevel=error") -Tail 3
+    } else {
+        Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
+    }
 } finally {
     if ($providerLocationPushed) {
         Pop-Location -ErrorAction SilentlyContinue
