@@ -485,12 +485,16 @@ function ensureSandboxRules(directory) {
 # Save branding
 Write-Utf8NoBom "$env:USERPROFILE\.cowork-branding.json" "{`"appName`":`"$APP_NAME`",`"provider`":`"$PROVIDER_DISPLAY`"}"
 
-# Install and build
+# Install and build. The repo's package.json already pins compatible
+# versions of electron, electron-builder, electron-store, and
+# electron-context-menu. Don't `bun add ...@latest` over them — that
+# pulls bleeding-edge Electron (e.g. 41.x) whose install.js requires
+# @electron/get, which isn't a transitive dep of electron-builder@24.x
+# and the postinstall fails. Just let `bun install` resolve from
+# package.json.
 Set-InstallStage "installing-build-dependencies"
-Write-Host "  Adding Electron dependencies..."
-Invoke-NativeTool -FilePath "bun" -ArgumentList @("add", "--dev", "electron@latest", "electron-builder@24.13.3", "electron-store@latest", "electron-context-menu@latest") -Tail 1
-Write-Host "  Installing all dependencies..."
-Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 1
+Write-Host "  Installing dependencies..."
+Invoke-NativeTool -FilePath "bun" -ArgumentList @("install") -Tail 3
 Write-Host "  Building frontend..."
 Set-InstallStage "building-web-frontend"
 Invoke-NativeTool -FilePath "bun" -ArgumentList @("run", "build:web") -Tail 3
