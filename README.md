@@ -33,10 +33,10 @@ Prebuilt binaries live in [`installers/`](installers/) on this branch and on the
 
 | Platform | File | Status |
 |----------|------|--------|
-| **macOS** (Apple Silicon, M1+) | [`installers/ChatFortAI Cowork Installer_0.1.0_aarch64.dmg`](installers/) | ✅ ready |
-| **macOS** (Intel) | `ChatFortAI Cowork Installer_0.1.0_x64.dmg` | ⏳ built by the `Build Installer` GitHub Action |
-| **Windows** (x64) | `ChatFortAI Cowork Installer_0.1.0_x64-setup.exe` | ⏳ built by the `Build Installer` GitHub Action — unsigned in v1, click "More info → Run anyway" on SmartScreen |
-| **Linux** (x64) | `ChatFortAI Cowork Installer_0.1.0_amd64.AppImage` | ⏳ built by the `Build Installer` GitHub Action — `chmod +x` then run |
+| **macOS** (Apple Silicon, M1+) | `ChatFortAI.Cowork.Installer_0.1.7_aarch64.dmg` | Built by the `Build Installer` GitHub Action |
+| **macOS** (Intel) | `ChatFortAI.Cowork.Installer_0.1.7_x64.dmg` | Built by the `Build Installer` GitHub Action |
+| **Windows** (x64) | `ChatFortAI.Cowork.Installer_0.1.7_x64-setup.exe` | Built by the `Build Installer` GitHub Action. Signed when Windows signing secrets are configured; unsigned builds may show SmartScreen. |
+| **Linux** (x64) | `ChatFortAI.Cowork.Installer_0.1.7_amd64.AppImage` | Built by the `Build Installer` GitHub Action — `chmod +x` then run |
 
 The installer walks you through three steps:
 
@@ -273,9 +273,9 @@ Every project directory gets a `CLAUDE.md` file that instructs the AI to stay wi
 | Platform | Method | Requirements |
 |----------|--------|-------------|
 | **Windows** | PowerShell + Open XML (.NET) | None — built into Windows |
-| **macOS / Linux** | Python + python-docx | Python 3 (auto-installs if needed) |
+| **macOS / Linux** | Python stdlib Open XML ZIP | Python 3 |
 
-The AI writes a `.ps1` or `.py` conversion script as a file first, then executes it. This avoids shell escaping issues that corrupt inline scripts.
+The AI writes a `.ps1` or `.py` conversion script as a file first, then executes it. This avoids shell escaping issues that corrupt inline scripts. Word COM automation and `python-docx` are intentionally not used because they are unreliable in unattended/sandboxed installs.
 
 ## Managing Available Models
 

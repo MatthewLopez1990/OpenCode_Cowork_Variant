@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "ChatFortAI Cowork Installer",
-  "version": "0.1.0",
+  "version": "0.1.11",
   "identifier": "ai.chatfort.cowork.installer",
   "build": {
     "beforeDevCommand": "bun run vite:dev",
@@ -43,6 +43,7 @@
       "minimumSystemVersion": "13.0"
     },
     "windows": {
+      "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../../scripts/sign-windows.ps1 %1",
       "nsis": {
         "installMode": "currentUser"
       }
